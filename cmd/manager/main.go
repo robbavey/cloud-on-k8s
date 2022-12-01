@@ -52,6 +52,7 @@ import (
 	kbv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1"
 	kbv1beta1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1beta1"
 	emsv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/maps/v1alpha1"
+	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	policyv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/stackconfigpolicy/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/agent"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/apmserver"
@@ -78,6 +79,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/kibana"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/license"
 	licensetrial "github.com/elastic/cloud-on-k8s/v2/pkg/controller/license/trial"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/maps"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/remoteca"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/stackconfigpolicy"
@@ -848,6 +850,7 @@ func registerControllers(mgr manager.Manager, params operator.Parameters, access
 		{name: "Agent", registerFunc: agent.Add},
 		{name: "Maps", registerFunc: maps.Add},
 		{name: "StackConfigPolicy", registerFunc: stackconfigpolicy.Add},
+		{name: "Logstash", registerFunc: logstash.Add},
 	}
 
 	for _, c := range controllers {
@@ -869,6 +872,7 @@ func registerControllers(mgr manager.Manager, params operator.Parameters, access
 		{name: "ENT-ES", registerFunc: associationctl.AddEntES},
 		{name: "BEAT-ES", registerFunc: associationctl.AddBeatES},
 		{name: "BEAT-KB", registerFunc: associationctl.AddBeatKibana},
+		{name: "LOGSTASH-ES", registerFunc: associationctl.AddLogstashES},
 		{name: "AGENT-ES", registerFunc: associationctl.AddAgentES},
 		{name: "AGENT-KB", registerFunc: associationctl.AddAgentKibana},
 		{name: "AGENT-FS", registerFunc: associationctl.AddAgentFleetServer},
@@ -914,6 +918,8 @@ func garbageCollectUsers(ctx context.Context, cfg *rest.Config, managedNamespace
 		For(&beatv1beta1.BeatList{}, associationctl.BeatAssociationLabelNamespace, associationctl.BeatAssociationLabelName).
 		For(&agentv1alpha1.AgentList{}, associationctl.AgentAssociationLabelNamespace, associationctl.AgentAssociationLabelName).
 		For(&emsv1alpha1.ElasticMapsServerList{}, associationctl.MapsESAssociationLabelNamespace, associationctl.MapsESAssociationLabelName).
+		// TODO: RWB Do we need to do this for logstash?
+		//For(&logstashv1alpha1.LogstashList{}, associationctl.MapsESAssociationLabelNamespace, associationctl.MapsESAssociationLabelName).
 		DoGarbageCollection(ctx)
 	if err != nil {
 		return fmt.Errorf("user garbage collector failed: %w", err)
@@ -926,14 +932,15 @@ func garbageCollectSoftOwnedSecrets(ctx context.Context, k8sClient k8s.Client) {
 	defer span.End()
 
 	if err := reconciler.GarbageCollectAllSoftOwnedOrphanSecrets(ctx, k8sClient, map[string]client.Object{
-		esv1.Kind:           &esv1.Elasticsearch{},
-		apmv1.Kind:          &apmv1.ApmServer{},
-		kbv1.Kind:           &kbv1.Kibana{},
-		entv1.Kind:          &entv1.EnterpriseSearch{},
-		beatv1beta1.Kind:    &beatv1beta1.Beat{},
-		agentv1alpha1.Kind:  &agentv1alpha1.Agent{},
-		emsv1alpha1.Kind:    &emsv1alpha1.ElasticMapsServer{},
-		policyv1alpha1.Kind: &policyv1alpha1.StackConfigPolicy{},
+		esv1.Kind:             &esv1.Elasticsearch{},
+		apmv1.Kind:            &apmv1.ApmServer{},
+		kbv1.Kind:             &kbv1.Kibana{},
+		entv1.Kind:            &entv1.EnterpriseSearch{},
+		beatv1beta1.Kind:      &beatv1beta1.Beat{},
+		agentv1alpha1.Kind:    &agentv1alpha1.Agent{},
+		emsv1alpha1.Kind:      &emsv1alpha1.ElasticMapsServer{},
+		policyv1alpha1.Kind:   &policyv1alpha1.StackConfigPolicy{},
+		logstashv1alpha1.Kind: &logstashv1alpha1.Logstash{},
 	}); err != nil {
 		log.Error(err, "Orphan secrets garbage collection failed, will be attempted again at next operator restart.")
 		return
@@ -974,6 +981,7 @@ func setupWebhook(
 		&kbv1.Kibana{},
 		&kbv1beta1.Kibana{},
 		&emsv1alpha1.ElasticMapsServer{},
+		//TODO: Add logstash webhook
 	}
 	for _, obj := range webhookObjects {
 		if err := commonwebhook.SetupValidatingWebhookWithConfig(&commonwebhook.Config{

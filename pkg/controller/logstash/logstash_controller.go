@@ -6,15 +6,16 @@ package logstash
 
 import (
 	"context"
-	"reflect"
+	//"reflect"
 	"fmt"
 	"hash/fnv"
 	//"go.elastic.co/apm/v2"
-	"sync/atomic"
+	//"sync/atomic"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -38,11 +39,13 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/deployment"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/driver"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/license"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/operator"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
+
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
+
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/version"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
@@ -69,8 +72,8 @@ const (
 //	return add(mgr, newReconciler(mgr))
 //}
 
-// Add creates a new MapsServer Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
+// Add creates a new Logstash Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
+//// and Start it when the Manager is Started.
 func Add(mgr manager.Manager, params operator.Parameters) error {
 	reconciler := newReconciler(mgr, params)
 	c, err := common.NewController(mgr, controllerName, reconciler, params)
@@ -79,12 +82,6 @@ func Add(mgr manager.Manager, params operator.Parameters) error {
 	}
 	return addWatches(c, reconciler)
 }
-
-
-//// newReconciler returns a new reconcile.Reconciler
-//func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-//	return &ReconcileLogstash{Client: mgr.GetClient(), scheme: mgr.GetScheme()}
-//}
 
 
 // newReconciler returns a new reconcile.Reconciler
@@ -100,7 +97,7 @@ func newReconciler(mgr manager.Manager, params operator.Parameters) *ReconcileLo
 }
 
 func addWatches(c controller.Controller, r *ReconcileLogstash) error {
-	// Watch for changes to MapsServer
+	// Watch for changes to Logstash
 	if err := c.Watch(&source.Kind{Type: &logstashv1alpha1.Logstash{}}, &handler.EnqueueRequestForObject{}); err != nil {
 		return err
 	}
@@ -202,13 +199,18 @@ var _ driver.Interface = &ReconcileLogstash{}
 // Reconcile reads that state of the cluster for a MapsServer object and makes changes based on the state read and what is
 // in the MapsServer.Spec
 func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
+	log := ulog.FromContext(ctx)
+	log.Info("HI!")
 	ctx = common.NewReconciliationContext(ctx, &r.iteration, r.Tracer, controllerName, "logstash_name", request)
 	defer common.LogReconciliationRun(ulog.FromContext(ctx))()
 	defer tracing.EndContextTransaction(ctx)
-
-	// retrieve the Logstash object
+	//
+	//// retrieve the Logstash object
+	ulog.FromContext(ctx).Info("Retrieving", "NAMEY", request.NamespacedName)
 	var logstash logstashv1alpha1.Logstash
+	//r.Client.Get(ctx, request.NamespacedName, &logstash)
 	if err := r.Client.Get(ctx, request.NamespacedName, &logstash); err != nil {
+		ulog.FromContext(ctx).Info("Error", err)
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, r.onDelete(ctx,
 				types.NamespacedName{
@@ -218,26 +220,30 @@ func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Req
 		}
 		return reconcile.Result{}, tracing.CaptureError(ctx, err)
 	}
-
+	//
+	ulog.FromContext(ctx).Info("Retrieved", "logstash", logstash)
 	if common.IsUnmanaged(ctx, &logstash) {
 		ulog.FromContext(ctx).Info("Object is currently not managed by this controller. Skipping reconciliation", "namespace", logstash.Namespace, "logstash_name", logstash.Name)
 		return reconcile.Result{}, nil
 	}
-
-	// Logstash will be deleted nothing to do other than remove the watches
+	//
+	//// Logstash will be deleted nothing to do other than remove the watches
 	if logstash.IsMarkedForDeletion() {
 		return reconcile.Result{}, r.onDelete(ctx, k8s.ExtractNamespacedName(&logstash))
 	}
-
-	// main reconciliation logic
+	//
+	//// main reconciliation logic
 	results, status := r.doReconcile(ctx, logstash)
+	ulog.FromContext(ctx).Info("Retrieved", "results", results, "status", status)
 	if err := r.updateStatus(ctx, logstash, status); err != nil {
-		if apierrors.IsConflict(err) {
-			return results.WithResult(reconcile.Result{Requeue: true}).Aggregate()
-		}
+		ulog.FromContext(ctx).Info("ERROR updating status", "err", err)
+		//if apierrors.IsConflict(err) {
+		//	return results.WithResult(reconcile.Result{Requeue: true}).Aggregate()
+		//}
 		results.WithError(err)
 	}
 	return results.Aggregate()
+	//return reconcile.Result{}, nil
 }
 
 func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1alpha1.Logstash) (*reconciler.Results, logstashv1alpha1.LogstashStatus) {
@@ -278,7 +284,7 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 	}
 
 	//TODO: THis is a hack to use svc
-	ulog.FromContext(ctx).Error(err, "Validation failed", svc)
+	ulog.FromContext(ctx).Info("This is the service!", "service", svc)
 
 	//_, results = certificates.Reconciler{
 	//	K8sClient:             r.K8sClient(),
@@ -369,6 +375,8 @@ func NewService(logstash logstashv1alpha1.Logstash) *corev1.Service {
 
 	// TODO: RB hack
 	svc := corev1.Service{}
+	svc.ObjectMeta.Namespace = logstash.Namespace
+	svc.ObjectMeta.Name = HTTPService(logstash.Name)
 
 	labels := labels(logstash)
 	//ports := []corev1.ServicePort{
@@ -426,6 +434,7 @@ func (r *ReconcileLogstash) reconcileDeployment(
 	//defer span.End()
 
 	deployParams, err := r.deploymentParams(logstash, configHash)
+
 	if err != nil {
 		return appsv1.Deployment{}, err
 	}
@@ -476,18 +485,18 @@ func (r *ReconcileLogstash) getStatus(ctx context.Context, logstash logstashv1al
 //TODO: Look at MapsStatus
 
 func (r *ReconcileLogstash) updateStatus(ctx context.Context, logstash logstashv1alpha1.Logstash, status logstashv1alpha1.LogstashStatus) error {
-	if reflect.DeepEqual(status, logstash.Status) {
-		return nil // nothing to do
-	}
-	if status.IsDegraded(logstash.Status.DeploymentStatus) {
-		r.recorder.Event(&logstash, corev1.EventTypeWarning, events.EventReasonUnhealthy, "Logstash health degraded")
-	}
-	ulog.FromContext(ctx).V(1).Info("Updating status",
-		"iteration", atomic.LoadUint64(&r.iteration),
-		"namespace", logstash.Namespace,
-		"maps_name", logstash.Name,
-		"status", status,
-	)
+	//if reflect.DeepEqual(status, logstash.Status) {
+	//	return nil // nothing to do
+	//}
+	//if status.IsDegraded(logstash.Status.DeploymentStatus) {
+	//	r.recorder.Event(&logstash, corev1.EventTypeWarning, events.EventReasonUnhealthy, "Logstash health degraded")
+	//}
+	//ulog.FromContext(ctx).V(1).Info("Updating status",
+	//	"iteration", atomic.LoadUint64(&r.iteration),
+	//	"namespace", logstash.Namespace,
+	//	"logstash_name", logstash.Name,
+	//	"status", status,
+	//)
 	logstash.Status = status
 	return common.UpdateStatus(ctx, r.Client, &logstash)
 }

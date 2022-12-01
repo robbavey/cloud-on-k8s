@@ -8973,16 +8973,38 @@ metadata:
 spec:
   group: logstash.k8s.elastic.co
   names:
+    categories:
+    - elastic
     kind: Logstash
     listKind: LogstashList
     plural: logstashes
+    shortNames:
+    - logstash
     singular: logstash
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.health
+      name: health
+      type: string
+    - description: Available nodes
+      jsonPath: .status.availableNodes
+      name: nodes
+      type: integer
+    - description: Elasticsearch version
+      jsonPath: .status.version
+      name: version
+      type: string
+    - jsonPath: .status.phase
+      name: phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Logstash is the Schema for the logstashes API
+        description: Logstash resource in a Kubernetes cluster.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -16301,11 +16323,11 @@ spec:
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
-                  for this Elastic Maps Server. It corresponds to the metadata generation,
-                  which is updated on mutation by the API Server. If the generation
-                  observed in status diverges from the generation in metadata, the
-                  Elastic Maps controller has not yet processed the changes contained
-                  in the Elastic Maps specification.
+                  for this Logstash. It corresponds to the metadata generation, which
+                  is updated on mutation by the API Server. If the generation observed
+                  in status diverges from the generation in metadata, the Elastic
+                  Maps controller has not yet processed the changes contained in the
+                  Elastic Maps specification.
                 format: int64
                 type: integer
               selector:
@@ -16320,6 +16342,8 @@ spec:
         type: object
     served: true
     storage: true
+    subresources:
+      status: {}
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition

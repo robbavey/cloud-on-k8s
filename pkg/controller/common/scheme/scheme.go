@@ -25,6 +25,7 @@ import (
 	kbv1beta1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/kibana/v1beta1"
 	emsv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/maps/v1alpha1"
 	policyv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/stackconfigpolicy/v1alpha1"
+	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 )
 
 var addToScheme sync.Once
@@ -55,6 +56,7 @@ func SetupScheme() {
 		agentv1alpha1.AddToScheme,
 		emsv1alpha1.AddToScheme,
 		policyv1alpha1.AddToScheme,
+		logstashv1alpha1.AddToScheme,
 	}
 	mustAddSchemeOnce(&addToScheme, schemes)
 }

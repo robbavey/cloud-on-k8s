@@ -60,6 +60,7 @@ func LowestVersionFromPods(ctx context.Context, currentVersion string, pods []co
 // UpdateStatus updates the status sub-resource of the given object.
 func UpdateStatus(ctx context.Context, client k8s.Client, obj client.Object) error {
 	err := client.Status().Update(ctx, obj)
+	ulog.FromContext(ctx).Info("Updating status", "object", obj)
 	return workaroundStatusUpdateError(ctx, err, client, obj)
 }
 

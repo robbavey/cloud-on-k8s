@@ -66,7 +66,7 @@ type LogstashStatus struct {
 
 	AssociationStatus commonv1.AssociationStatus `json:"associationStatus,omitempty"`
 
-	// ObservedGeneration is the most recent generation observed for this Elastic Maps Server.
+	// ObservedGeneration is the most recent generation observed for this Logstash.
 	// It corresponds to the metadata generation, which is updated on mutation by the API Server.
 	// If the generation observed in status diverges from the generation in metadata, the Elastic
 	// Maps controller has not yet processed the changes contained in the Elastic Maps specification.
@@ -74,11 +74,16 @@ type LogstashStatus struct {
 
 }
 
-// +genclient
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-
-// Logstash is the Schema for the logstashes API
-// +k8s:openapi-gen=true
+// Logstash resource in a Kubernetes cluster.
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:categories=elastic,shortName=logstash
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="health",type="string",JSONPath=".status.health"
+// +kubebuilder:printcolumn:name="nodes",type="integer",JSONPath=".status.availableNodes",description="Available nodes"
+// +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Elasticsearch version"
+// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:storageversion
 type Logstash struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

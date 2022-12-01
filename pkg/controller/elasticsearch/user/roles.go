@@ -33,6 +33,8 @@ const (
 	// ApmUserRoleV80 is the name of the role used by APMServer instances to connect to Elasticsearch from version 8.0
 	ApmUserRoleV80 = "eck_apm_user_role_v80"
 
+	LogstashUserRole = "eck_logstash_user_role_v80"
+
 	// ApmAgentUserRole is the name of the role used by APMServer instances to connect to Kibana
 	ApmAgentUserRole = "eck_apm_agent_user_role"
 
@@ -110,6 +112,19 @@ var (
 				},
 			},
 		},
+		// StackMonitoringUserRole is a dedicated role for Stack Monitoring with Metricbeat and Filebeat used for the
+		// user sending monitoring data.
+		// See: https://www.elastic.co/guide/en/beats/filebeat/7.14/privileges-to-publish-monitoring.html.
+		LogstashUserRole: esclient.Role{
+			Cluster: []string{"monitor", "manage_ilm", "manage_ml", "read_ilm", "cluster:admin/ingest/pipeline/get"},
+			Indices: []esclient.IndexRole{
+				{
+					Names:      []string{"logstash-*"},
+					Privileges: []string{"manage", "read", "create_doc", "view_index_metadata", "create_index"},
+				},
+			},
+		},
+
 		// StackMonitoringUserRole is a dedicated role for Stack Monitoring with Metricbeat and Filebeat used for the
 		// user sending monitoring data.
 		// See: https://www.elastic.co/guide/en/beats/filebeat/7.14/privileges-to-publish-monitoring.html.
