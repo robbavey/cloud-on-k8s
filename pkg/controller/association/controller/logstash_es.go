@@ -5,10 +5,9 @@
 package controller
 
 import (
-	//"fmt"
-	//"strings"
+	"fmt"
 
-	//pkgerrors "github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -58,26 +57,38 @@ func AddLogstashES(mgr manager.Manager, accessReviewer rbac.AccessReviewer, para
 		AssociationResourceNameLabelName:      eslabel.ClusterNameLabelName,
 		AssociationResourceNamespaceLabelName: eslabel.ClusterNamespaceLabelName,
 
+
 		ElasticsearchUserCreation: &association.ElasticsearchUserCreation{
 			ElasticsearchRef: func(c k8s.Client, association commonv1.Association) (bool, commonv1.ObjectSelector, error) {
 				return true, association.AssociationRef(), nil
 			},
 			UserSecretSuffix: "logstash-user",
-			ESUserRole:       getLogstashRoles,
+			ESUserRole: func(associated commonv1.Associated) (string, error) {
+				return "superuser", nil
+			},
 		},
+
+		//ElasticsearchUserCreation: &association.ElasticsearchUserCreation{
+		//	ElasticsearchRef: func(c k8s.Client, association commonv1.Association) (bool, commonv1.ObjectSelector, error) {
+		//		return true, association.AssociationRef(), nil
+		//	},
+		//	UserSecretSuffix: "logstash-user",
+		//	ESUserRole:       getLogstashRoles,
+		//},
 	})
 }
 
 func getLogstashRoles(assoc commonv1.Associated) (string, error) {
-	//logstash, ok := assoc.(*logstashv1alpha1.Logstash)
-	//if !ok {
-	//	return "", pkgerrors.Errorf(
-	//		"Logstash expected, got %s/%s",
-	//		assoc.GetObjectKind().GroupVersionKind().Group,
-	//		assoc.GetObjectKind().GroupVersionKind().Kind,
-	//	)
-	//}
-	//
+	logstash, ok := assoc.(*logstashv1alpha1.Logstash)
+	if !ok {
+		return "", pkgerrors.Errorf(
+			"Logstash expected, got %s/%s",
+			assoc.GetObjectKind().GroupVersionKind().Group,
+			assoc.GetObjectKind().GroupVersionKind().Kind,
+		)
+	}
+	fmt.Sprintf("Ths is %s", logstash)
+
 	////if strings.Contains(beat.Spec.Type, ",") {
 	////	return "", fmt.Errorf("beat type %s should not contain a comma", beat.Spec.Type)
 	////}
@@ -92,7 +103,8 @@ func getLogstashRoles(assoc commonv1.Associated) (string, error) {
 	//if v.GTE(version.MinFor(8, 0, 0)){
 	//
 	//}
-	// TODO: THis may be nonsense
+	// TODO: Fix this
+
 	return esuser.LogstashUserRole, nil
 
 	// Roles for supported Logstashs are based on:

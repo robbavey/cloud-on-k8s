@@ -7,9 +7,9 @@ package v1alpha1
 import (
 	"fmt"
 
+	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -46,16 +46,18 @@ type LogstashSpec struct {
 	// +kubebuilder:validation:Optional
 	ConfigRef *commonv1.ConfigSource `json:"configRef,omitempty"`
 
+	// HTTP holds the HTTP layer configuration for Logstash
+	HTTP commonv1.HTTPConfig `json:"http,omitempty"`
+
 	// ServiceAccountName is used to check access from the current resource to a resource (for ex. Elasticsearch) in a different namespace.
 	// Can only be used if ECK is enforcing RBAC on references.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
-	// PodTemplate provides customisation options (labels, annotations, affinity rules, resource requests, and so on) for the Elastic Maps Server pods
+	// PodTemplate provides customisation options (labels, annotations, affinity rules, resource requests, and so on) for the Logstash pods
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:pruning:PreserveUnknownFields
 	PodTemplate corev1.PodTemplateSpec `json:"podTemplate,omitempty"`
-
 }
 
 // LogstashStatus defines the observed state of Logstash
@@ -71,12 +73,11 @@ type LogstashStatus struct {
 	// If the generation observed in status diverges from the generation in metadata, the Elastic
 	// Maps controller has not yet processed the changes contained in the Elastic Maps specification.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
-
 }
 
 // Logstash resource in a Kubernetes cluster.
 // +kubebuilder:object:root=true
-// +kubebuilder:resource:categories=elastic,shortName=logstash
+// +kubebuilder:resource:categories=elastic,shortName=ls
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="health",type="string",JSONPath=".status.health"
 // +kubebuilder:printcolumn:name="nodes",type="integer",JSONPath=".status.availableNodes",description="Available nodes"
@@ -88,8 +89,8 @@ type Logstash struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   LogstashSpec   `json:"spec,omitempty"`
-	Status LogstashStatus `json:"status,omitempty"`
+	Spec      LogstashSpec              `json:"spec,omitempty"`
+	Status    LogstashStatus            `json:"status,omitempty"`
 	assocConf *commonv1.AssociationConf `json:"-"`
 }
 

@@ -5,6 +5,8 @@
 package logstash
 
 import (
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/volume"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -18,8 +20,9 @@ import (
 
 const (
 	HTTPPort                 = 9600
-	//configHashAnnotationName = "maps.k8s.elastic.co/config-hash"
-	//logVolumeMountPath       = "/var/log/elastic-maps-server"
+	configHashAnnotationName = "logstash.k8s.elastic.co/config-hash"
+	ConfigFilename           = "logstash.yml"
+	ConfigMountPath          = "/usr/share/logstash/config/logstash.yml"
 )
 
 var (
@@ -64,59 +67,65 @@ func newPodSpec(logstash logstashv1alpha1.Logstash, configHash string) (corev1.P
 	//	{Name: logstash.Spec.HTTP.Protocol(), ContainerPort: int32(HTTPPort), Protocol: corev1.ProtocolTCP},
 	//}
 
-	//cfgVolume := configSecretVolume(ems)
-	//logsVolume := volume.NewEmptyDirVolume("logs", logVolumeMountPath)
+	// TODO: Make
+	defaultContainerPorts := []corev1.ContainerPort{
+		{Name: "http", ContainerPort: 9600, Protocol: corev1.ProtocolTCP},
+	}
+
+	// TODO: Add volumes for other logstash parts
+	cfgVolume := configSecretVolume(logstash)
 
 	builder := defaults.NewPodTemplateBuilder(logstash.Spec.PodTemplate, logstashv1alpha1.LogstashContainerName).
 		WithAnnotations(annotations).
 		WithResources(DefaultResources).
 		WithDockerImage(logstash.Spec.Image, container.ImageRepository(container.LogstashImage, logstash.Spec.Version)).
-		//WithReadinessProbe(readinessProbe(logstash.Spec.HTzTP.TLS.Enabled())).
-		//WithPorts(defaultContainerPorts).
-		//WithVolumes(cfgVolume.Volume(), logsVolume.Volume()).
-		//WithVolumeMounts(cfgVolume.VolumeMount(), logsVolume.VolumeMount()).
+		//WithReadinessProbe(readinessProbe(logstash.Spec.HTTP.TLS.Enabled())).
+		WithPorts(defaultContainerPorts).
+		WithVolumes(cfgVolume.Volume()).
+		WithVolumeMounts(cfgVolume.VolumeMount()).
 		WithInitContainerDefaults()
 
-	//builder, err := withESCertsVolume(builder, ems)
-	//if err != nil {
-	//	return corev1.PodTemplateSpec{}, err
-	//}
-	//builder = withHTTPCertsVolume(builder, ems)
+	builder, err := withESCertsVolume(builder, logstash)
+	if err != nil {
+		return corev1.PodTemplateSpec{}, err
+	}
 
-	//esAssocConf, err := ems.AssociationConf()
-	//if err != nil {
-	//	return corev1.PodTemplateSpec{}, err
-	//}
-	//if !esAssocConf.IsConfigured() {
-	//	// supported as of 7.14, harmless on prior versions, but both Elasticsearch connection and this must not be specified
-	//	builder = builder.WithEnv(corev1.EnvVar{Name: "ELASTICSEARCH_PREVALIDATED", Value: "true"})
-	//}
+	//builder = withHTTPCertsVolume(builder, logstash)
+
+	esAssocConf, err := logstash.AssociationConf()
+	if err != nil {
+		return corev1.PodTemplateSpec{}, err
+	}
+	if !esAssocConf.IsConfigured() {
+		// supported as of 7.14, harmless on prior versions, but both Elasticsearch connection and this must not be specified
+		builder = builder.WithEnv(corev1.EnvVar{Name: "ELASTICSEARCH_PREVALIDATED", Value: "true"})
+	}
 
 	return builder.PodTemplate, nil
 }
 
-//func withESCertsVolume(builder *defaults.PodTemplateBuilder, ems emsv1alpha1.ElasticMapsServer) (*defaults.PodTemplateBuilder, error) {
-//	esAssocConf, err := ems.AssociationConf()
-//	if err != nil {
-//		return nil, err
-//	}
-//	if !esAssocConf.CAIsConfigured() {
-//		return builder, nil
-//	}
-//	vol := volume.NewSecretVolumeWithMountPath(
-//		esAssocConf.GetCASecretName(),
-//		"es-certs",
-//		ESCertsPath,
-//	)
-//	return builder.
-//		WithVolumes(vol.Volume()).
-//		WithVolumeMounts(vol.VolumeMount()), nil
-//}
-//
-//func withHTTPCertsVolume(builder *defaults.PodTemplateBuilder, logstash logstashv1alpha1.Logstash) *defaults.PodTemplateBuilder {
-//	//if !ems.Spec.HTTP.TLS.Enabled() {
-//		return builder
-//	//}
-//	//vol := certificates.HTTPCertSecretVolume(EMSNamer, ems.Name)
-//	//return builder.WithVolumes(vol.Volume()).WithVolumeMounts(vol.VolumeMount())
-//}
+func withESCertsVolume(builder *defaults.PodTemplateBuilder, logstash logstashv1alpha1.Logstash) (*defaults.PodTemplateBuilder, error) {
+	esAssocConf, err := logstash.AssociationConf()
+	if err != nil {
+		return nil, err
+	}
+	if !esAssocConf.CAIsConfigured() {
+		return builder, nil
+	}
+	vol := volume.NewSecretVolumeWithMountPath(
+		esAssocConf.GetCASecretName(),
+		"es-certs",
+		ESCertsPath,
+	)
+	return builder.
+		WithVolumes(vol.Volume()).
+		WithVolumeMounts(vol.VolumeMount()), nil
+}
+
+func withHTTPCertsVolume(builder *defaults.PodTemplateBuilder, logstash logstashv1alpha1.Logstash) *defaults.PodTemplateBuilder {
+	if !logstash.Spec.HTTP.TLS.Enabled() {
+		return builder
+	}
+	vol := certificates.HTTPCertSecretVolume(LogstashNamer, logstash.Name)
+	return builder.WithVolumes(vol.Volume()).WithVolumeMounts(vol.VolumeMount())
+}

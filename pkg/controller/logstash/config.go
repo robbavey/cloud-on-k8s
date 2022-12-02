@@ -6,8 +6,10 @@ package logstash
 
 import (
 	"context"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
+
 	//"path"
-	//"path/filepath"
+	"path/filepath"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,9 +29,7 @@ import (
 )
 
 const (
-	//ESCertsPath     = "/mnt/elastic-internal/es-certs"
-	ConfigFilename  = "logstash.yml"
-	ConfigMountPath = "/usr/src/app/server/config/logstash.yml"
+	ESCertsPath     = "/mnt/elastic-internal/es-certs"
 )
 
 func configSecretVolume(logstash logstashv1alpha1.Logstash) volume.SecretVolume {
@@ -76,12 +76,11 @@ func newConfig(ctx context.Context, d driver.Interface, logstash logstashv1alpha
 	}
 
 	defaults := defaultConfig(ipFamily)
-	tls := tlsConfig(logstash)
 	assocCfg, err := associationConfig(ctx, d.K8sClient(), logstash)
 	if err != nil {
 		return cfg, err
 	}
-	err = cfg.MergeWith(inlineUserCfg, refUserCfg, defaults, tls, assocCfg)
+	err = cfg.MergeWith(inlineUserCfg, refUserCfg, defaults, assocCfg)
 	return cfg, err
 }
 
@@ -94,20 +93,8 @@ func inlineUserConfig(cfg *commonv1.Config) (*settings.CanonicalConfig, error) {
 
 func defaultConfig(ipFamily corev1.IPFamily) *settings.CanonicalConfig {
 	return settings.MustCanonicalConfig(map[string]interface{}{
-		"host": net.InAddrAnyFor(ipFamily).String(),
+		"http.host": net.InAddrAnyFor(ipFamily).String(),
 	})
-}
-
-func tlsConfig(logstash logstashv1alpha1.Logstash) *settings.CanonicalConfig {
-	return settings.NewCanonicalConfig()
-	//if !ems.Spec.HTTP.TLS.Enabled() {
-	//	return settings.NewCanonicalConfig()
-	//}
-	//return settings.MustCanonicalConfig(map[string]interface{}{
-	//	"ssl.enabled":     true,
-	//	"ssl.certificate": path.Join(certificates.HTTPCertificatesSecretVolumeMountPath, certificates.CertFileName),
-	//	"ssl.key":         path.Join(certificates.HTTPCertificatesSecretVolumeMountPath, certificates.KeyFileName),
-	//})
 }
 
 func associationConfig(ctx context.Context, c k8s.Client, logstash logstashv1alpha1.Logstash) (*settings.CanonicalConfig, error) {
@@ -123,23 +110,22 @@ func associationConfig(ctx context.Context, c k8s.Client, logstash logstashv1alp
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Make this the value in logstash.xml
 	if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]string{
-		"elasticsearch.host":     assocConf.URL,
-		"elasticsearch.username": credentials.Username,
-		"elasticsearch.password": credentials.Password,
+		"xpack.management.enabled": "true",
+		"xpack.management.elasticsearch.hosts": assocConf.URL,
+		"xpack.management.elasticsearch.username": credentials.Username,
+		"xpack.management.elasticsearch.password": credentials.Password,
 	})); err != nil {
 		return nil, err
 	}
 
 	// TODO: Setup CA
-	//if assocConf.GetCACertProvided() {
-	//	if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]interface{}{
-	//		"elasticsearch.ssl.verificationMode":       "certificate",
-	//		"elasticsearch.ssl.certificateAuthorities": filepath.Join(ESCertsPath, certificates.CAFileName),
-	//	})); err != nil {
-	//		return nil, err
-	//	}
-	//}
+	if assocConf.GetCACertProvided() {
+		if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]interface{}{
+			"xpack.management,elasticsearch.ssl.certificateAuthorities": filepath.Join(ESCertsPath, certificates.CAFileName),
+		})); err != nil {
+			return nil, err
+		}
+	}
 	return cfg, nil
 }

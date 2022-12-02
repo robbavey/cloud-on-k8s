@@ -850,6 +850,7 @@ func registerControllers(mgr manager.Manager, params operator.Parameters, access
 		{name: "Agent", registerFunc: agent.Add},
 		{name: "Maps", registerFunc: maps.Add},
 		{name: "StackConfigPolicy", registerFunc: stackconfigpolicy.Add},
+		// RWB Add Logstash Controller Registration Function
 		{name: "Logstash", registerFunc: logstash.Add},
 	}
 
@@ -872,6 +873,7 @@ func registerControllers(mgr manager.Manager, params operator.Parameters, access
 		{name: "ENT-ES", registerFunc: associationctl.AddEntES},
 		{name: "BEAT-ES", registerFunc: associationctl.AddBeatES},
 		{name: "BEAT-KB", registerFunc: associationctl.AddBeatKibana},
+		// RWB Add Logstash->Elasticsearch Association controller
 		{name: "LOGSTASH-ES", registerFunc: associationctl.AddLogstashES},
 		{name: "AGENT-ES", registerFunc: associationctl.AddAgentES},
 		{name: "AGENT-KB", registerFunc: associationctl.AddAgentKibana},
@@ -918,8 +920,7 @@ func garbageCollectUsers(ctx context.Context, cfg *rest.Config, managedNamespace
 		For(&beatv1beta1.BeatList{}, associationctl.BeatAssociationLabelNamespace, associationctl.BeatAssociationLabelName).
 		For(&agentv1alpha1.AgentList{}, associationctl.AgentAssociationLabelNamespace, associationctl.AgentAssociationLabelName).
 		For(&emsv1alpha1.ElasticMapsServerList{}, associationctl.MapsESAssociationLabelNamespace, associationctl.MapsESAssociationLabelName).
-		// TODO: RWB Do we need to do this for logstash?
-		//For(&logstashv1alpha1.LogstashList{}, associationctl.MapsESAssociationLabelNamespace, associationctl.MapsESAssociationLabelName).
+		For(&logstashv1alpha1.LogstashList{}, associationctl.LogstashAssociationLabelNamespace, associationctl.LogstashAssociationLabelName).
 		DoGarbageCollection(ctx)
 	if err != nil {
 		return fmt.Errorf("user garbage collector failed: %w", err)
@@ -981,7 +982,8 @@ func setupWebhook(
 		&kbv1.Kibana{},
 		&kbv1beta1.Kibana{},
 		&emsv1alpha1.ElasticMapsServer{},
-		//TODO: Add logstash webhook
+		// RWB Add logstash webhook
+		&logstashv1alpha1.Logstash{},
 	}
 	for _, obj := range webhookObjects {
 		if err := commonwebhook.SetupValidatingWebhookWithConfig(&commonwebhook.Config{

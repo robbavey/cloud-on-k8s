@@ -274,10 +274,12 @@ func UpdateAssociationConf(
 
 	annotationName := association.AssociationConfAnnotationName()
 	annotations[annotationName] = unsafeBytesToString(serializedConf)
+	ulog.FromContext(ctx).Info("Update", "Annotations", annotations)
 	if err := accessor.SetAnnotations(obj, annotations); err != nil {
 		return err
 	}
 
+	ulog.FromContext(ctx).Info("Update", "persisting obj", obj)
 	// persist the changes
 	return client.Update(ctx, obj)
 }

@@ -6,10 +6,16 @@ package logstash
 
 import (
 	"context"
+
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
+
 	//"reflect"
 	"fmt"
 	"hash/fnv"
-	//"go.elastic.co/apm/v2"
+
+	"go.elastic.co/apm/v2"
+
 	//"sync/atomic"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -18,14 +24,16 @@ import (
 
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	//"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
+
 	//"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	//"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
 	//logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	//ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
@@ -34,11 +42,13 @@ import (
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/association"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common"
-	//commonassociation "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/association"
+
+	commonassociation "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/association"
 	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/deployment"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/driver"
+
 	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/license"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/operator"
@@ -51,29 +61,15 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
-
 )
-
-//var log = logf.Log.WithName("logstash-controller")
 
 const (
 	controllerName = "logstash-controller"
-	configHashAnnotationName = "logstash.k8s.elastic.co/config-hash"
 )
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
-// Add creates a new Logstash Controller and adds it to the Manager with default RBAC.
-// The Manager will set fields on the Controller and Start it when the Manager is Started.
-//func Add(mgr manager.Manager) error {
-//	return add(mgr, newReconciler(mgr))
-//}
 
 // Add creates a new Logstash Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
-//// and Start it when the Manager is Started.
+// // and Start it when the Manager is Started.
 func Add(mgr manager.Manager, params operator.Parameters) error {
 	reconciler := newReconciler(mgr, params)
 	c, err := common.NewController(mgr, controllerName, reconciler, params)
@@ -82,7 +78,6 @@ func Add(mgr manager.Manager, params operator.Parameters) error {
 	}
 	return addWatches(c, reconciler)
 }
-
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager, params operator.Parameters) *ReconcileLogstash {
@@ -139,7 +134,6 @@ func addWatches(c controller.Controller, r *ReconcileLogstash) error {
 	return c.Watch(&source.Kind{Type: &corev1.Secret{}}, r.dynamicWatches.Secrets)
 }
 
-
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
@@ -171,8 +165,6 @@ var _ reconcile.Reconciler = &ReconcileLogstash{}
 
 // ReconcileLogstash reconciles a Logstash object
 type ReconcileLogstash struct {
-	//client.Client
-	//scheme *runtime.Scheme
 	k8s.Client
 	operator.Parameters
 	recorder       record.EventRecorder
@@ -183,7 +175,7 @@ type ReconcileLogstash struct {
 }
 
 func (r *ReconcileLogstash) K8sClient() k8s.Client {
-return r.Client
+	return r.Client
 }
 
 func (r *ReconcileLogstash) DynamicWatches() watches.DynamicWatches {
@@ -196,21 +188,17 @@ func (r *ReconcileLogstash) Recorder() record.EventRecorder {
 
 var _ driver.Interface = &ReconcileLogstash{}
 
-// Reconcile reads that state of the cluster for a MapsServer object and makes changes based on the state read and what is
-// in the MapsServer.Spec
+// Reconcile reads that state of the cluster for a Logstash object and makes changes based on the state read and what is
+// in the Logstash.Spec
 func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
 	log := ulog.FromContext(ctx)
-	log.Info("HI!")
 	ctx = common.NewReconciliationContext(ctx, &r.iteration, r.Tracer, controllerName, "logstash_name", request)
 	defer common.LogReconciliationRun(ulog.FromContext(ctx))()
 	defer tracing.EndContextTransaction(ctx)
 	//
 	//// retrieve the Logstash object
-	ulog.FromContext(ctx).Info("Retrieving", "NAMEY", request.NamespacedName)
 	var logstash logstashv1alpha1.Logstash
-	//r.Client.Get(ctx, request.NamespacedName, &logstash)
 	if err := r.Client.Get(ctx, request.NamespacedName, &logstash); err != nil {
-		ulog.FromContext(ctx).Info("Error", err)
 		if apierrors.IsNotFound(err) {
 			return reconcile.Result{}, r.onDelete(ctx,
 				types.NamespacedName{
@@ -221,9 +209,9 @@ func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Req
 		return reconcile.Result{}, tracing.CaptureError(ctx, err)
 	}
 	//
-	ulog.FromContext(ctx).Info("Retrieved", "logstash", logstash)
+	log.Info("Retrieved", "logstash", logstash)
 	if common.IsUnmanaged(ctx, &logstash) {
-		ulog.FromContext(ctx).Info("Object is currently not managed by this controller. Skipping reconciliation", "namespace", logstash.Namespace, "logstash_name", logstash.Name)
+		log.Info("Object is currently not managed by this controller. Skipping reconciliation", "namespace", logstash.Namespace, "logstash_name", logstash.Name)
 		return reconcile.Result{}, nil
 	}
 	//
@@ -234,16 +222,14 @@ func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Req
 	//
 	//// main reconciliation logic
 	results, status := r.doReconcile(ctx, logstash)
-	ulog.FromContext(ctx).Info("Retrieved", "results", results, "status", status)
 	if err := r.updateStatus(ctx, logstash, status); err != nil {
 		ulog.FromContext(ctx).Info("ERROR updating status", "err", err)
-		//if apierrors.IsConflict(err) {
-		//	return results.WithResult(reconcile.Result{Requeue: true}).Aggregate()
-		//}
+		if apierrors.IsConflict(err) {
+			return results.WithResult(reconcile.Result{Requeue: true}).Aggregate()
+		}
 		results.WithError(err)
 	}
 	return results.Aggregate()
-	//return reconcile.Result{}, nil
 }
 
 func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1alpha1.Logstash) (*reconciler.Results, logstashv1alpha1.LogstashStatus) {
@@ -251,18 +237,20 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 	results := reconciler.NewResult(ctx)
 	status := newStatus(logstash)
 
+	// TODO: If Logstash requires licensing reinstate this section.
 	//enabled, err := r.licenseChecker.EnterpriseFeaturesEnabled(ctx)
 	//if err != nil {
 	//	return results.WithError(err), status
 	//}
 
 	//if !enabled {
-	//	msg := "Elastic Maps Server is an enterprise feature. Enterprise features are disabled"
-	//	log.Info(msg, "namespace", ems.Namespace, "maps_name", ems.Name)
-	//	r.recorder.Eventf(&ems, corev1.EventTypeWarning, events.EventReconciliationError, msg)
+	//	msg := "Logstash on ECK is an enterprise feature. Enterprise features are disabled"
+	//	log.Info(msg, "namespace", logstash.Namespace, "logstash_name", ems.Name)
+	//	r.recorder.Eventf(&logstash, corev1.EventTypeWarning, events.EventReconciliationError, msg)
 	//	// we don't have a good way of watching for the license level to change so just requeue with a reasonably long delay
 	//	return results.WithResult(reconcile.Result{Requeue: true, RequeueAfter: 5 * time.Minute}), status
 	//}
+
 
 	isEsAssocConfigured, err := association.IsConfiguredIfSet(ctx, &logstash, r.recorder)
 	if err != nil {
@@ -277,7 +265,6 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 		return results.WithError(err), status
 	}
 
-
 	svc, err := common.ReconcileService(ctx, r.Client, NewService(logstash), &logstash)
 	if err != nil {
 		return results.WithError(err), status
@@ -290,9 +277,9 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 	//	K8sClient:             r.K8sClient(),
 	//	DynamicWatches:        r.DynamicWatches(),
 	//	Owner:                 &logstash,
-	//	TLSOptions:            ems.Spec.HTTP.TLS,
-	//	Namer:                 EMSNamer,
-	//	Labels:                labels(ems.Name),
+	//	TLSOptions:            logstash.Spec.HTTP.TLS,
+	//	Namer:                 LogstashNamer,
+	//	Labels:                labels(logstash),
 	//	Services:              []corev1.Service{*svc},
 	//	GlobalCA:              r.GlobalCA,
 	//	CACertRotation:        r.CACertRotation,
@@ -301,7 +288,7 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 	//}.ReconcileCAAndHTTPCerts(ctx)
 	//if results.HasError() {
 	//	_, err := results.Aggregate()
-	//	k8s.EmitErrorEvent(r.recorder, err, &ems, events.EventReconciliationError, "Certificate reconciliation error: %v", err)
+	//	k8s.EmitErrorEvent(r.recorder, err, &logstash, events.EventReconciliationError, "Certificate reconciliation error: %v", err)
 	//	return results, status
 	//}
 
@@ -350,48 +337,39 @@ func newStatus(logstash logstashv1alpha1.Logstash) logstashv1alpha1.LogstashStat
 }
 
 func (r *ReconcileLogstash) validate(ctx context.Context, logstash logstashv1alpha1.Logstash) error {
-	//TODO: RWB Add validate webhook
-	//span, vctx := apm.StartSpan(ctx, "validate", tracing.SpanTypeApp)
-	//defer span.End()
+
+	span, vctx := apm.StartSpan(ctx, "validate", tracing.SpanTypeApp)
+	defer span.End()
 	//
-	//if err := logstash.ValidateCreate(); err != nil {
-	//	ulog.FromContext(ctx).Error(err, "Validation failed")
-	//	k8s.EmitErrorEvent(r.recorder, err, &logstash, events.EventReasonValidation, err.Error())
-	//	return tracing.CaptureError(vctx, err)
-	//}
+	if err := logstash.ValidateCreate(); err != nil {
+		ulog.FromContext(ctx).Error(err, "Validation failed")
+		k8s.EmitErrorEvent(r.recorder, err, &logstash, events.EventReasonValidation, err.Error())
+		return tracing.CaptureError(vctx, err)
+	}
 
 	return nil
 }
 
+// Create new Service
 func NewService(logstash logstashv1alpha1.Logstash) *corev1.Service {
 
-	//svc := corev1.Service{
-	//	ObjectMeta: ems.Spec.HTTP.Service.ObjectMeta,
-	//	Spec:       ems.Spec.HTTP.Service.Spec,
-	//}
-	//
-	//svc.ObjectMeta.Namespace = logstash.Namespace
-	//svc.ObjectMeta.Name = HTTPService(ems.Name)
-
-	// TODO: RB hack
 	svc := corev1.Service{}
 	svc.ObjectMeta.Namespace = logstash.Namespace
 	svc.ObjectMeta.Name = HTTPService(logstash.Name)
 
 	labels := labels(logstash)
-	//ports := []corev1.ServicePort{
-	//	{
-	//		Name:     ems.Spec.HTTP.Protocol(),
-	//		Protocol: corev1.ProtocolTCP,
-	//		Port:     HTTPPort,
-	//	},
-	//}
 
+	// TODO: Make this a setting, rather than hard coding each ingress requirement
 	ports := []corev1.ServicePort{
 		{
 			Name:     "http",
 			Protocol: corev1.ProtocolTCP,
 			Port:     9600,
+		},
+		{
+			Name:     "beats",
+			Protocol: corev1.ProtocolTCP,
+			Port:     5044,
 		},
 	}
 
@@ -402,25 +380,12 @@ func buildConfigHash(c k8s.Client, logstash logstashv1alpha1.Logstash, configSec
 	// build a hash of various settings to rotate the Pod on any change
 	configHash := fnv.New32a()
 
-	// - in the Elastic Maps Server configuration file content
+	// Write logstash yaml
 	_, _ = configHash.Write(configSecret.Data[ConfigFilename])
-
-	//// - in the Elastic Maps Server TLS certificates
-	//if ems.Spec.HTTP.TLS.Enabled() {
-	//	var tlsCertSecret corev1.Secret
-	//	tlsSecretKey := types.NamespacedName{Namespace: ems.Namespace, Name: certificates.InternalCertsSecretName(EMSNamer, ems.Name)}
-	//	if err := c.Get(context.Background(), tlsSecretKey, &tlsCertSecret); err != nil {
-	//		return "", err
-	//	}
-	//	if certPem, ok := tlsCertSecret.Data[certificates.CertFileName]; ok {
-	//		_, _ = configHash.Write(certPem)
-	//	}
-	//}
-
 	//// - in the associated Elasticsearch TLS certificates
-	//if err := commonassociation.WriteAssocsToConfigHash(c, ems.GetAssociations(), configHash); err != nil {
-	//	return "", err
-	//}
+	if err := commonassociation.WriteAssocsToConfigHash(c, logstash.GetAssociations(), configHash); err != nil {
+		return "", err
+	}
 
 	return fmt.Sprint(configHash.Sum32()), nil
 }
@@ -430,8 +395,8 @@ func (r *ReconcileLogstash) reconcileDeployment(
 	logstash logstashv1alpha1.Logstash,
 	configHash string,
 ) (appsv1.Deployment, error) {
-	//span, _ := apm.StartSpan(ctx, "reconcile_deployment", tracing.SpanTypeApp)
-	//defer span.End()
+	span, _ := apm.StartSpan(ctx, "reconcile_deployment", tracing.SpanTypeApp)
+	defer span.End()
 
 	deployParams, err := r.deploymentParams(logstash, configHash)
 
@@ -439,6 +404,7 @@ func (r *ReconcileLogstash) reconcileDeployment(
 		return appsv1.Deployment{}, err
 	}
 	deploy := deployment.New(deployParams)
+
 	return deployment.Reconcile(ctx, r.K8sClient(), deploy, &logstash)
 }
 
@@ -450,7 +416,6 @@ func (r *ReconcileLogstash) deploymentParams(logstash logstashv1alpha1.Logstash,
 
 	deploymentLabels := labels(logstash)
 
-	// Lookup what maps is
 	podLabels := maps.Merge(labels(logstash), versionLabels(logstash))
 	//// merge with user-provided labels
 	podSpec.Labels = maps.MergePreservingExistingKeys(podSpec.Labels, podLabels)
@@ -510,7 +475,6 @@ func (r *ReconcileLogstash) onDelete(ctx context.Context, obj types.NamespacedNa
 	r.dynamicWatches.Secrets.RemoveHandlerForKey(common.ConfigRefWatchName(obj))
 	return reconciler.GarbageCollectSoftOwnedSecrets(ctx, r.Client, obj, logstashv1alpha1.Kind)
 }
-
 
 //// Reconcile reads that state of the cluster for a Logstash object and makes changes based on the state read
 //// and what is in the Logstash.Spec
