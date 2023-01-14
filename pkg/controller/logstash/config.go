@@ -94,7 +94,7 @@ func getExistingConfig(ctx context.Context, client k8s.Client, logstash logstash
 	}
 	err := client.Get(context.Background(), key, &secret)
 	if err != nil && apierrors.IsNotFound(err) {
-		ulog.FromContext(ctx).V(1).Info("Logstash config secret does not exist", "namespace", logstash.Namespace, "ent_name", logstash.Name)
+		ulog.FromContext(ctx).V(1).Info("Logstash config secret does not exist", "namespace", logstash.Namespace, "name", logstash.Name)
 		return nil, nil
 	} else if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func associationConfig(params Params) (*settings.CanonicalConfig, error) {
 
 		if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]interface{}{
 			"xpack.management.enabled":                "true",
-			"xpack.management.elasticsearch.hosts":    []string{assocConf.GetURL()},
+			"xpack.management.elasticsearch.hosts":    assocConf.GetURL(),
 			"xpack.management.elasticsearch.username": credentials.Username,
 			"xpack.management.elasticsearch.password": credentials.Password,
 		})); err != nil {

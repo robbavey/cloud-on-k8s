@@ -19,7 +19,13 @@ metadata:
   name: logstash-sample
 spec:
   version: 8.5.0
-  count: 1
   elasticsearchRef:
     name: elasticsearch-sample
   config:
+  deployment:
+    podTemplate:
+      spec:
+        securityContext:
+          runAsUser: 0
+        containers:
+          - name: logstash

@@ -42,7 +42,7 @@ const (
 	VersionLabelName = "logstash.k8s.elastic.co/version"
 
 	// HTTPPort is the (default) API port used by Logstash
-	HTTPPort = 5601
+	HTTPPort = 9600
 )
 
 var (
@@ -67,9 +67,9 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		volume.NewSecretVolume(
 			ConfigSecretName(params.Logstash.Name),
 			ConfigVolumeName,
-			path.Join(ConfigMountPath, ConfigFileName),
+			path.Join("/mnt/elastic-internal/logstash" /*ConfigMountPath*/, ConfigFileName),
 			ConfigFileName,
-			0440),
+			0644),
 	}
 
 	// all volumes with CAs of direct associations
@@ -108,11 +108,6 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 func getVolumesFromAssociations(associations []commonv1.Association) ([]volume.VolumeLike, error) {
 	var vols []volume.VolumeLike //nolint:prealloc
 	for i, assoc := range associations {
-		// the Kibana association is only used by the operator to interact with the Kibana Fleet API but
-		// not by the individual Elastic Logstash Pods. There is therefore no need to mount the Kibana certificate secret.
-		if assoc.AssociationType() == commonv1.KibanaAssociationType {
-			continue
-		}
 		assocConf, err := assoc.AssociationConf()
 		if err != nil {
 			return nil, err

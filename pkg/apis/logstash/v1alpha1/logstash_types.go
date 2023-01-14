@@ -90,8 +90,8 @@ type LogstashStatus struct {
 
 	// ObservedGeneration is the most recent generation observed for this Logstash instance.
 	// It corresponds to the metadata generation, which is updated on mutation by the API Server.
-	// If the generation observed in status diverges from the generation in metadata, the Kibana
-	// controller has not yet processed the changes contained in the Kibana specification.
+	// If the generation observed in status diverges from the generation in metadata, the Logstash
+	// controller has not yet processed the changes contained in the Logstash specification.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 

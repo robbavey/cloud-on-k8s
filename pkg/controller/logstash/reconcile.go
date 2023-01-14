@@ -9,8 +9,6 @@ import (
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -31,9 +29,7 @@ func reconcilePodVehicle(params Params, podTemplate corev1.PodTemplateSpec) (*re
 	results := reconciler.NewResult(params.Context)
 
 	spec := params.Logstash.Spec
-	name := DeploymentName(params.Logstash.Name)
 
-	var toDelete client.Object
 	var reconciliationFunc func(params ReconciliationParams) (int32, int32, error)
 	switch {
 	case spec.Deployment != nil:
@@ -51,16 +47,6 @@ func reconcilePodVehicle(params Params, podTemplate corev1.PodTemplateSpec) (*re
 		return results.WithError(err), params.Status
 	}
 
-	// clean up the other one
-	if err := params.Client.Get(params.Context, types.NamespacedName{
-		Namespace: params.Logstash.Namespace,
-		Name:      name,
-	}, toDelete); err == nil {
-		results.WithError(params.Client.Delete(params.Context, toDelete))
-	} else if !apierrors.IsNotFound(err) {
-		results.WithError(err)
-	}
-
 	var status logstashv1alpha1.LogstashStatus
 	if status, err = calculateStatus(&params, ready, desired); err != nil {
 		err = errors.Wrap(err, "while calculating status")
@@ -71,7 +57,7 @@ func reconcilePodVehicle(params Params, podTemplate corev1.PodTemplateSpec) (*re
 
 func reconcileDeployment(rp ReconciliationParams) (int32, int32, error) {
 	d := deployment.New(deployment.Params{
-		Name:                 DeploymentName(rp.logstash.Name),
+		Name:                 Name(rp.logstash.Name),
 		Namespace:            rp.logstash.Namespace,
 		Selector:             NewLabels(rp.logstash),
 		Labels:               NewLabels(rp.logstash),
