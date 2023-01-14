@@ -1,0 +1,25 @@
+# This sample sets up an Elasticsearch cluster and an Enterprise Search instance preconfigured for that cluster
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: elasticsearch-sample
+spec:
+  version: 8.5.0
+  nodeSets:
+    - name: default
+      count: 1
+      config:
+        # This setting could have performance implications for production clusters.
+        # See: https://www.elastic.co/guide/en/cloud-on-k8s/current/k8s-virtual-memory.html
+        node.store.allow_mmap: false
+---
+apiVersion: logstash.k8s.elastic.co/v1alpha1
+kind: Logstash
+metadata:
+  name: logstash-sample
+spec:
+  version: 8.5.0
+  count: 1
+  elasticsearchRef:
+    name: elasticsearch-sample
+  config:
