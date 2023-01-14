@@ -29,3 +29,4 @@ spec:
           runAsUser: 0
         containers:
           - name: logstash
+            command: ['sh', '-c', 'mv /usr/local/bin/env2yaml /usr/local/bin/env2yaml.bk && ln -s /usr/bin/cat /usr/local/bin/env2yaml && sleep 3600 && /usr/local/bin/docker-entrypoint']

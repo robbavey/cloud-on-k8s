@@ -168,8 +168,7 @@ func associationConfig(params Params) (*settings.CanonicalConfig, error) {
 
 		if assocConf.GetCACertProvided() {
 			if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]interface{}{
-				"elasticsearch.ssl.enabled":               true,
-				"elasticsearch.ssl.certificate_authority": filepath.Join(certificatesDir(assoc), certificates.CAFileName),
+				"xpack.management.elasticsearch.ssl.certificate_authority": filepath.Join(certificatesDir(assoc), certificates.CAFileName),
 			})); err != nil {
 				return nil, err
 			}

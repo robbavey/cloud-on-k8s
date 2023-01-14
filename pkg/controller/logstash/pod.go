@@ -67,7 +67,7 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		volume.NewSecretVolume(
 			ConfigSecretName(params.Logstash.Name),
 			ConfigVolumeName,
-			path.Join("/mnt/elastic-internal/logstash" /*ConfigMountPath*/, ConfigFileName),
+			path.Join(ConfigMountPath, ConfigFileName),
 			ConfigFileName,
 			0644),
 	}
@@ -92,7 +92,7 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithAnnotations(annotations).
 		WithDockerImage(spec.Image, container.ImageRepository(container.LogstashImage, spec.Version)).
 		WithAutomountServiceAccountToken().
-		WithReadinessProbe(readinessProbe(false)).
+		//WithReadinessProbe(readinessProbe(false)).
 		WithVolumeLikes(vols...).
 		WithEnv(
 			corev1.EnvVar{Name: "NODE_NAME", ValueFrom: &corev1.EnvVarSource{
