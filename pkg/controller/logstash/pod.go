@@ -28,12 +28,9 @@ const (
 	ConfigMountPath  = "/usr/share/logstash/config"
 	ConfigFileName   = "logstash.yml"
 
-	FleetCertsVolumeName = "fleet-certs"
-	FleetCertsMountPath  = "/usr/share/fleet-server/config/http-certs"
-
 	DataVolumeName            = "logstash-data"
-	DataMountHostPathTemplate = "/var/lib/logstash/%s/%s/state"
-	DataMountPath             = "/usr/share/logstash/state" // available since 7.13 functional since 7.15 without effect before that
+	DataMountHostPathTemplate = "/var/lib/logstash/%s/%s/data"
+	DataMountPath             = "/usr/share/logstash/data"
 
 	// ConfigHashAnnotationName is an annotation used to store the Logstash config hash.
 	ConfigHashAnnotationName = "logstash.k8s.elastic.co/config-hash"
@@ -92,15 +89,8 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithAnnotations(annotations).
 		WithDockerImage(spec.Image, container.ImageRepository(container.LogstashImage, spec.Version)).
 		WithAutomountServiceAccountToken().
-		//WithReadinessProbe(readinessProbe(false)).
-		WithVolumeLikes(vols...).
-		WithEnv(
-			corev1.EnvVar{Name: "NODE_NAME", ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "spec.nodeName",
-				},
-			}},
-		)
+		WithReadinessProbe(readinessProbe(false)).
+		WithVolumeLikes(vols...)
 
 	return builder.PodTemplate, nil
 }

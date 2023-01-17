@@ -19,6 +19,10 @@ var Namer = common_name.NewNamer("logstash")
 
 // ConfigSecretName returns the name of a secret used to storage Logstash configuration data.
 func ConfigSecretName(name string) string {
+	return Namer.Suffix(name, "secret")
+}
+
+func ConfigMapName(name string) string {
 	return Namer.Suffix(name, "config")
 }
 

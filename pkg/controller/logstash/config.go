@@ -7,10 +7,12 @@ package logstash
 import (
 	"context"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/labels"
 	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 	"hash"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"path/filepath"
+	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,7 +22,6 @@ import (
 	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/association"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/labels"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/settings"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
@@ -177,4 +178,28 @@ func associationConfig(params Params) (*settings.CanonicalConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func ReconcileConfigMap(
+	ctx context.Context,
+	c k8s.Client,
+	expected corev1.ConfigMap,
+	logstash *logstashv1alpha1.Logstash,
+) error {
+	reconciled := &corev1.ConfigMap{}
+	return reconciler.ReconcileResource(
+		reconciler.Params{
+			Context:    ctx,
+			Client:     c,
+			Owner:      logstash,
+			Expected:   &expected,
+			Reconciled: reconciled,
+			NeedsUpdate: func() bool {
+				return !reflect.DeepEqual(expected.Data, reconciled.Data)
+			},
+			UpdateReconciled: func() {
+				reconciled.Data = expected.Data
+			},
+		},
+	)
 }
