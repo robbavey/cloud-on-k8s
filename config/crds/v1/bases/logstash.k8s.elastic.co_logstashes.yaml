@@ -4,6 +4,7 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.0
+  creationTimestamp: null
   name: logstashes.logstash.k8s.elastic.co
 spec:
   group: logstash.k8s.elastic.co
@@ -46,7 +47,7 @@ spec:
               configRef:
                 description: ConfigRef contains a reference to an existing Kubernetes
                   Secret holding the Logstash configuration. Logstash settings must
-                  be specified as yaml, under a single "Logstash.yml" entry. At most
+                  be specified as yaml, under a single "logstash.yml" entry. At most
                   one of [`Config`, `ConfigRef`] can be specified.
                 properties:
                   secretName:
@@ -8346,6 +8347,25 @@ spec:
                 description: Image is the Logstash Docker image to deploy. Version
                   and Type have to match the Logstash in the image.
                 type: string
+              pipelineRef:
+                description: PipelineRef contains a reference to an existing Kubernetes
+                  Secret holding the Logstash Pipelines. Logstash pipeline must be
+                  specified as yaml, under a single "pipeline.yml" entry. At most
+                  one of [`Pipelines`, `PipelineRef`] can be specified.
+                properties:
+                  secretName:
+                    description: SecretName is the name of the secret.
+                    type: string
+                type: object
+              pipelines:
+                description: Pipelines holds the Logstash Pipelines. At most one of
+                  [`Pipelines`, `PipelineRef`] can be specified.
+                items:
+                  additionalProperties:
+                    type: string
+                  type: object
+                type: array
+                x-kubernetes-preserve-unknown-fields: true
               revisionHistoryLimit:
                 description: RevisionHistoryLimit is the number of revisions to retain
                   to allow rollback in the underlying DaemonSet or Deployment.
@@ -8418,8 +8438,8 @@ spec:
                   for this Logstash instance. It corresponds to the metadata generation,
                   which is updated on mutation by the API Server. If the generation
                   observed in status diverges from the generation in metadata, the
-                  Kibana controller has not yet processed the changes contained in
-                  the Kibana specification.
+                  Logstash controller has not yet processed the changes contained
+                  in the Logstash specification.
                 format: int64
                 type: integer
               version:

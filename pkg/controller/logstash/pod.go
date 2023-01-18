@@ -28,6 +28,9 @@ const (
 	ConfigMountPath  = "/usr/share/logstash/config"
 	ConfigFileName   = "logstash.yml"
 
+	PipelineVolumeName = "pipeline"
+	PipelineFileName   = "pipelines.yml"
+
 	DataVolumeName            = "logstash-data"
 	DataMountHostPathTemplate = "/var/lib/logstash/%s/%s/data"
 	DataMountPath             = "/usr/share/logstash/data"
@@ -67,6 +70,13 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 			path.Join(ConfigMountPath, ConfigFileName),
 			ConfigFileName,
 			0644),
+		// volume with logstash pipeline file
+		volume.NewSecretVolume(
+			PipelineSecretName(params.Logstash.Name),
+			PipelineVolumeName,
+			path.Join(ConfigMountPath, PipelineFileName),
+			PipelineFileName,
+			0644),
 	}
 
 	// all volumes with CAs of direct associations
@@ -89,7 +99,7 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithAnnotations(annotations).
 		WithDockerImage(spec.Image, container.ImageRepository(container.LogstashImage, spec.Version)).
 		WithAutomountServiceAccountToken().
-		WithReadinessProbe(readinessProbe(false)).
+		//WithReadinessProbe(readinessProbe(false)).
 		WithVolumeLikes(vols...)
 
 	return builder.PodTemplate, nil

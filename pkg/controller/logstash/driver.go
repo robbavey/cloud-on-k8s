@@ -102,6 +102,10 @@ func internalReconcile(params Params) (*reconciler.Results, logstashv1alpha1.Log
 		return results.WithResults(res), params.Status
 	}
 
+	if res := reconcilePipeline(params, configHash); res.HasError() {
+		return results.WithResults(res), params.Status
+	}
+
 	// we need to deref the secret here (if any) to include it in the configHash otherwise Logstash will not be rolled on content changes
 	if err := commonassociation.WriteAssocsToConfigHash(params.Client, params.Logstash.GetAssociations(), configHash); err != nil {
 		return results.WithError(err), params.Status

@@ -37,10 +37,21 @@ type LogstashSpec struct {
 	Config *commonv1.Config `json:"config,omitempty"`
 
 	// ConfigRef contains a reference to an existing Kubernetes Secret holding the Logstash configuration.
-	// Logstash settings must be specified as yaml, under a single "Logstash.yml" entry. At most one of [`Config`, `ConfigRef`]
+	// Logstash settings must be specified as yaml, under a single "logstash.yml" entry. At most one of [`Config`, `ConfigRef`]
 	// can be specified.
 	// +kubebuilder:validation:Optional
 	ConfigRef *commonv1.ConfigSource `json:"configRef,omitempty"`
+
+	// Pipelines holds the Logstash Pipelines. At most one of [`Pipelines`, `PipelineRef`] can be specified.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Pipelines []map[string]string `json:"pipelines,omitempty"`
+
+	// PipelineRef contains a reference to an existing Kubernetes Secret holding the Logstash Pipelines.
+	// Logstash pipeline must be specified as yaml, under a single "pipeline.yml" entry. At most one of [`Pipelines`, `PipelineRef`]
+	// can be specified.
+	// +kubebuilder:validation:Optional
+	PipelineRef *commonv1.ConfigSource `json:"pipelineRef,omitempty"`
 
 	// SecureSettings is a list of references to Kubernetes Secrets containing sensitive configuration options for the Logstash.
 	// Secrets data can be then referenced in the Logstash config using the Secret's keys or as specified in `Entries` field of

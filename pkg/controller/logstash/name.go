@@ -11,6 +11,7 @@ import (
 const (
 	httpServiceSuffix = "http"
 	configSuffix      = "config"
+	pipelineSuffix    = "pipeline"
 	deploymentSuffix  = "deployment"
 )
 
@@ -19,11 +20,15 @@ var Namer = common_name.NewNamer("logstash")
 
 // ConfigSecretName returns the name of a secret used to storage Logstash configuration data.
 func ConfigSecretName(name string) string {
-	return Namer.Suffix(name, "secret")
+	return Namer.Suffix(name, configSuffix)
 }
 
 func ConfigMapName(name string) string {
-	return Namer.Suffix(name, "config")
+	return Namer.Suffix(name, "cm")
+}
+
+func PipelineSecretName(name string) string {
+	return Namer.Suffix(name, pipelineSuffix)
 }
 
 // Name returns the name of Logstash.
@@ -48,4 +53,8 @@ func DeploymentName(name string) string {
 
 func ConfigName(name string) string {
 	return Namer.Suffix(name, configSuffix)
+}
+
+func PipelineName(name string) string {
+	return Namer.Suffix(name, pipelineSuffix)
 }

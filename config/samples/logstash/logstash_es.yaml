@@ -1,4 +1,5 @@
-# This sample sets up an Elasticsearch cluster and an Enterprise Search instance preconfigured for that cluster
+# To run this example, start elasticsearch trial for xpack monitoring
+#  curl -X POST -u "elastic:$ES_PW" -k 'https://elasticsearch-sample-es-http.default.svc:9200/_license/start_trial?acknowledge=true'
 apiVersion: elasticsearch.k8s.elastic.co/v1
 kind: Elasticsearch
 metadata:
@@ -9,8 +10,6 @@ spec:
     - name: default
       count: 1
       config:
-        # This setting could have performance implications for production clusters.
-        # See: https://www.elastic.co/guide/en/cloud-on-k8s/current/k8s-virtual-memory.html
         node.store.allow_mmap: false
 ---
 apiVersion: logstash.k8s.elastic.co/v1alpha1
@@ -22,6 +21,11 @@ spec:
   elasticsearchRef:
     name: elasticsearch-sample
   config:
+    log.level: info
+    queue.type: memory
+  pipelines:
+    - pipeline.id: main
+      config.string: input { exec { command => 'uptime' interval => 10 } } output { stdout{} }
   deployment:
     podTemplate:
       spec:
