@@ -6,6 +6,10 @@ package logstash
 
 import (
 	"context"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
 	"hash/fnv"
 
 	"github.com/go-logr/logr"
@@ -15,7 +19,6 @@ import (
 	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/association"
 	commonassociation "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/association"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/operator"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
@@ -86,19 +89,37 @@ func internalReconcile(params Params) (*reconciler.Results, logstashv1alpha1.Log
 		return results, params.Status // will eventually retry
 	}
 
-	configHash := fnv.New32a()
+	svc, err := common.ReconcileService(params.Context, params.Client, newService(params.Logstash), &params.Logstash)
+	if err != nil {
+		return results.WithError(err), params.Status
+	}
 
-	if results.HasRequeue() || results.HasError() {
-		if results.HasRequeue() {
-			// we requeue if Kibana is unavailable: surface this condition to the user
-			message := "Delaying deployment of Logstash as Elasticsearch is not available yet"
-			params.Logger().Info(message)
-			params.EventRecorder.Event(&params.Logstash, corev1.EventTypeWarning, events.EventReasonDelayed, message)
-		}
+	_, results = certificates.Reconciler{
+		K8sClient:             params.Client,
+		DynamicWatches:        params.Watches,
+		Owner:                 &params.Logstash,
+		TLSOptions:            params.Logstash.Spec.HTTP.TLS,
+		Namer:                 Namer,
+		Labels:                NewLabels(params.Logstash),
+		Services:              []corev1.Service{*svc},
+		GlobalCA:              params.OperatorParams.GlobalCA,
+		CACertRotation:        params.OperatorParams.CACertRotation,
+		CertRotation:          params.OperatorParams.CertRotation,
+		GarbageCollectSecrets: true,
+	}.ReconcileCAAndHTTPCerts(params.Context)
+	if results.HasError() {
+		_, err := results.Aggregate()
+		k8s.EmitErrorEvent(params.Recorder(), err, &params.Logstash, events.EventReconciliationError, "Certificate reconciliation error: %v", err)
 		return results, params.Status
 	}
 
+	configHash := fnv.New32a()
+
 	if res := reconcileConfig(params, configHash); res.HasError() {
+		return results.WithResults(res), params.Status
+	}
+
+	if res := reconcileAssociationConfig(params, configHash); res.HasError() {
 		return results.WithResults(res), params.Status
 	}
 
@@ -116,4 +137,24 @@ func internalReconcile(params Params) (*reconciler.Results, logstashv1alpha1.Log
 		return results.WithError(err), params.Status
 	}
 	return reconcilePodVehicle(params, podTemplate)
+}
+
+func newService(logstash logstashv1alpha1.Logstash) *corev1.Service {
+	svc := corev1.Service{
+		ObjectMeta: logstash.Spec.HTTP.Service.ObjectMeta,
+		Spec:       logstash.Spec.HTTP.Service.Spec,
+	}
+
+	svc.ObjectMeta.Namespace = logstash.Namespace
+	svc.ObjectMeta.Name = HTTPServiceName(logstash.Name)
+
+	labels := NewLabels(logstash)
+	ports := []corev1.ServicePort{
+		{
+			Name:     logstash.Spec.HTTP.Protocol(),
+			Protocol: corev1.ProtocolTCP,
+			Port:     HTTPPort,
+		},
+	}
+	return defaults.SetServiceDefaults(&svc, labels, labels, ports)
 }

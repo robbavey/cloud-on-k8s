@@ -7,6 +7,7 @@ package logstash
 import (
 	"fmt"
 	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
+	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/container"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
@@ -30,6 +31,9 @@ const (
 
 	PipelineVolumeName = "pipeline"
 	PipelineFileName   = "pipelines.yml"
+
+	ElasticsearchVolumeName = "elasticsearch-ref"
+	ElasticsearchFileName   = "elasticsearch-ref.yml"
 
 	DataVolumeName            = "logstash-data"
 	DataMountHostPathTemplate = "/var/lib/logstash/%s/%s/data"
@@ -77,6 +81,12 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 			path.Join(ConfigMountPath, PipelineFileName),
 			PipelineFileName,
 			0644),
+		volume.NewSecretVolume(
+			ElasticsearchRefSecretName(params.Logstash.Name),
+			ElasticsearchVolumeName,
+			path.Join(ConfigMountPath, ElasticsearchFileName),
+			ElasticsearchFileName,
+			0644),
 	}
 
 	// all volumes with CAs of direct associations
@@ -93,13 +103,16 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		ConfigHashAnnotationName: fmt.Sprint(configHash.Sum32()),
 	}
 
+	ports := getDefaultContainerPorts(params.Logstash)
+
 	builder = builder.
 		WithResources(defaultResources).
 		WithLabels(labels).
 		WithAnnotations(annotations).
 		WithDockerImage(spec.Image, container.ImageRepository(container.LogstashImage, spec.Version)).
 		WithAutomountServiceAccountToken().
-		//WithReadinessProbe(readinessProbe(false)).
+		WithPorts(ports).
+		WithReadinessProbe(readinessProbe(false)).
 		WithVolumeLikes(vols...)
 
 	return builder.PodTemplate, nil
@@ -145,6 +158,12 @@ func certificatesDir(association commonv1.Association) string {
 		ref.Namespace,
 		ref.NameOrSecretName(),
 	)
+}
+
+func getDefaultContainerPorts(logstash logstashv1alpha1.Logstash) []corev1.ContainerPort {
+	return []corev1.ContainerPort{
+		{Name: logstash.Spec.HTTP.Protocol(), ContainerPort: int32(HTTPPort), Protocol: corev1.ProtocolTCP},
+	}
 }
 
 // readinessProbe is the readiness probe for the Kibana container

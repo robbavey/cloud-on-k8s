@@ -80,13 +80,8 @@ func buildConfig(params Params) ([]byte, error) {
 		return nil, err
 	}
 
-	associationCfg, err := associationConfig(params)
-	if err != nil {
-		return nil, err
-	}
-
 	// merge with user settings last so they take precedence
-	if err = cfg.MergeWith(existingCfg, associationCfg, userProvidedCfg); err != nil {
+	if err = cfg.MergeWith(existingCfg, userProvidedCfg); err != nil {
 		return nil, err
 	}
 
@@ -139,8 +134,45 @@ func defaultConfig() (*settings.CanonicalConfig, error) {
 	return settings.MustCanonicalConfig(settingsMap), nil
 }
 
-func associationConfig(params Params) (*settings.CanonicalConfig, error) {
+func reconcileAssociationConfig(params Params, configHash hash.Hash) *reconciler.Results {
+	defer tracing.Span(&params.Context)()
+	results := reconciler.NewResult(params.Context)
 
+	cfgBytes, err := buildAssociationConfig(params)
+	if err != nil {
+		return results.WithError(err)
+	}
+
+	expected := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: params.Logstash.Namespace,
+			Name:      ElasticsearchRefSecretName(params.Logstash.Name),
+			Labels:    labels.AddCredentialsLabel(NewLabels(params.Logstash)),
+		},
+		Data: map[string][]byte{
+			ElasticsearchFileName: cfgBytes,
+		},
+	}
+
+	if _, err = reconciler.ReconcileSecret(params.Context, params.Client, expected, &params.Logstash); err != nil {
+		return results.WithError(err)
+	}
+
+	_, _ = configHash.Write(cfgBytes)
+
+	return results
+}
+
+func buildAssociationConfig(params Params) ([]byte, error) {
+	cfg, err := getAssociationConfig(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg.Render()
+}
+
+func getAssociationConfig(params Params) (*settings.CanonicalConfig, error) {
 	allAssociations := params.Logstash.GetAssociations()
 
 	var esAssociations []commonv1.Association
@@ -165,18 +197,18 @@ func associationConfig(params Params) (*settings.CanonicalConfig, error) {
 			return settings.NewCanonicalConfig(), err
 		}
 
+		esRefName := getEsRefNamespacedName(params.Logstash)
 		if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]interface{}{
-			"xpack.monitoring.enabled":                "true",
-			"xpack.monitoring.elasticsearch.hosts":    assocConf.GetURL(),
-			"xpack.monitoring.elasticsearch.username": credentials.Username,
-			"xpack.monitoring.elasticsearch.password": credentials.Password,
+			esRefName + ".hosts":    assocConf.GetURL(),
+			esRefName + ".username": credentials.Username,
+			esRefName + ".password": credentials.Password,
 		})); err != nil {
 			return nil, err
 		}
 
 		if assocConf.GetCACertProvided() {
 			if err := cfg.MergeWith(settings.MustCanonicalConfig(map[string]interface{}{
-				"xpack.monitoring.elasticsearch.ssl.certificate_authority": filepath.Join(certificatesDir(assoc), certificates.CAFileName),
+				esRefName + ".ssl.certificate_authority": filepath.Join(certificatesDir(assoc), certificates.CAFileName),
 			})); err != nil {
 				return nil, err
 			}
@@ -185,6 +217,17 @@ func associationConfig(params Params) (*settings.CanonicalConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+func getEsRefNamespacedName(logstash logstashv1alpha1.Logstash) string {
+	var namespace string
+	if logstash.ElasticsearchRef().Namespace == "" {
+		namespace = "default"
+	} else {
+		namespace = logstash.ElasticsearchRef().Namespace
+	}
+
+	return fmt.Sprintf("%s.%s", namespace, logstash.ElasticsearchRef().Name)
 }
 
 func ReconcileConfigMap(

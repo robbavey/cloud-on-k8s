@@ -13,10 +13,11 @@ const (
 	configSuffix      = "config"
 	pipelineSuffix    = "pipeline"
 	deploymentSuffix  = "deployment"
+	esRefSuffix       = "es-ref"
 )
 
 // Namer is a Namer that is configured with the defaults for resources related to an Agent resource.
-var Namer = common_name.NewNamer("logstash")
+var Namer = common_name.NewNamer("ls")
 
 // ConfigSecretName returns the name of a secret used to storage Logstash configuration data.
 func ConfigSecretName(name string) string {
@@ -29,6 +30,10 @@ func ConfigMapName(name string) string {
 
 func PipelineSecretName(name string) string {
 	return Namer.Suffix(name, pipelineSuffix)
+}
+
+func ElasticsearchRefSecretName(name string) string {
+	return Namer.Suffix(name, esRefSuffix)
 }
 
 // Name returns the name of Logstash.
