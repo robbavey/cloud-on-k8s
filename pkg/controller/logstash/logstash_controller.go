@@ -64,14 +64,6 @@ func addWatches(c controller.Controller, r *ReconcileLogstash) error {
 		return err
 	}
 
-	// Watch DaemonSets
-	if err := c.Watch(&source.Kind{Type: &appsv1.DaemonSet{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &logstashv1alpha1.Logstash{},
-	}); err != nil {
-		return err
-	}
-
 	// Watch Deployments
 	if err := c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
@@ -94,8 +86,7 @@ func addWatches(c controller.Controller, r *ReconcileLogstash) error {
 		return err
 	}
 
-	// Watch services - Logstash in Fleet mode with Fleet Server enabled configures and exposes a Service
-	// for Elastic Logstashs to connect to.
+	// Watch services
 	if err := c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &logstashv1alpha1.Logstash{},
