@@ -113,6 +113,7 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithAutomountServiceAccountToken().
 		WithPorts(ports).
 		WithReadinessProbe(readinessProbe(false)).
+		WithLivenessProbe(livenessProbe(false)).
 		WithVolumeLikes(vols...)
 
 	return builder.PodTemplate, nil
@@ -166,7 +167,7 @@ func getDefaultContainerPorts(logstash logstashv1alpha1.Logstash) []corev1.Conta
 	}
 }
 
-// readinessProbe is the readiness probe for the Kibana container
+// readinessProbe is the readiness probe for the Logstash container
 func readinessProbe(useTLS bool) corev1.Probe {
 	scheme := corev1.URISchemeHTTP
 	if useTLS {
@@ -175,6 +176,28 @@ func readinessProbe(useTLS bool) corev1.Probe {
 	return corev1.Probe{
 		FailureThreshold:    3,
 		InitialDelaySeconds: 30,
+		PeriodSeconds:       10,
+		SuccessThreshold:    1,
+		TimeoutSeconds:      5,
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Port:   intstr.FromInt(HTTPPort),
+				Path:   "/",
+				Scheme: scheme,
+			},
+		},
+	}
+}
+
+// livenessProbe is the liveness probe for the Logstash container
+func livenessProbe(useTLS bool) corev1.Probe {
+	scheme := corev1.URISchemeHTTP
+	if useTLS {
+		scheme = corev1.URISchemeHTTPS
+	}
+	return corev1.Probe{
+		FailureThreshold:    3,
+		InitialDelaySeconds: 60,
 		PeriodSeconds:       10,
 		SuccessThreshold:    1,
 		TimeoutSeconds:      5,
