@@ -21,16 +21,33 @@ spec:
   elasticsearchRef:
     name: elasticsearch-sample
   config:
-    log.level: info
-    api.http.host: "0.0.0.0"
+    log.level: debug
+    config.debug: true
     queue.type: memory
   pipelines:
     - pipeline.id: main
-      config.string: |-
-        input { exec { command => 'uptime' interval => 10 } } 
-        output { stdout{} }
+      config.string: |
+        input { 
+          exec { 
+            command => 'uptime' 
+            interval => 10 
+          } 
+        } 
+        output { 
+         elasticsearch{
+           cacert => "${DEFAULT_ELASTICSEARCH_SAMPLE_ES_SSL_CERTIFICATE_AUTHORITY}"
+           user => "${DEFAULT_ELASTICSEARCH_SAMPLE_ES_USERNAME}"
+           hosts => "${DEFAULT_ELASTICSEARCH_SAMPLE_ES_HOSTS}"
+           password => "${DEFAULT_ELASTICSEARCH_SAMPLE_ES_PASSWORD}" 
+          } 
+        }
   deployment:
     podTemplate:
       spec:
         containers:
           - name: logstash
+            securityContext:
+              privileged: true
+            envFrom:
+            - secretRef:
+                name: logstash-sample-ls-es-ref

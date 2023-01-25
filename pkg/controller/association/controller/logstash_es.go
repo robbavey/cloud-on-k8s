@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"strings"
+	//"strings"
 
 	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
@@ -62,8 +62,9 @@ func AddLogstashES(mgr manager.Manager, accessReviewer rbac.AccessReviewer, para
 				return true, association.AssociationRef(), nil
 			},
 			UserSecretSuffix: "logstash-user",
+			// Use superuser to enable logstash writes. More granular control needed
 			ESUserRole: func(associated commonv1.Associated) (string, error) {
-				return strings.Join([]string{LogstashAdminUserBuiltinRole, LogstashSystemUserBuiltinRole}, ","), nil
+				return "superuser", nil
 			},
 		},
 	})

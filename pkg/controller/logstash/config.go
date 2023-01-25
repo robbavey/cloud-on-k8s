@@ -33,6 +33,8 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/settings"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
+
+	"strings"
 )
 
 func reconcileConfig(params Params, configHash hash.Hash) *reconciler.Results {
@@ -62,6 +64,40 @@ func reconcileConfig(params Params, configHash hash.Hash) *reconciler.Results {
 	_, _ = configHash.Write(cfgBytes)
 
 	return results
+}
+
+func buildEnv(params Params) (map[string][]byte, error){
+	allAssociations := params.Logstash.GetAssociations()
+	allEnv := make(map[string][]byte)
+	var esAssociations []commonv1.Association
+	for _, assoc := range allAssociations {
+		if assoc.AssociationType() == commonv1.ElasticsearchAssociationType {
+			esAssociations = append(esAssociations, assoc)
+		}
+	}
+
+	for _, assoc := range esAssociations {
+		assocConf, err := assoc.AssociationConf()
+		if err != nil {
+			return nil, err
+		}
+
+		credentials, err := association.ElasticsearchAuthSettings(params.Context, params.Client, assoc)
+		if err != nil {
+			return nil, err
+		}
+
+		esRefName := strings.ReplaceAll(getEsRefNamespacedName(params.Logstash), "-", "_")
+		allEnv[strings.ToUpper(esRefName) + "_ES_HOSTS"] = []byte(assocConf.GetURL())
+		allEnv[strings.ToUpper(esRefName) + "_ES_USERNAME"] = []byte(credentials.Username)
+		allEnv[strings.ToUpper(esRefName) + "_ES_PASSWORD"] = []byte(credentials.Password)
+
+		if assocConf.GetCACertProvided() {
+			allEnv[strings.ToUpper(esRefName) + "_ES_SSL_CERTIFICATE_AUTHORITY"] = []byte(filepath.Join(certificatesDir(assoc), certificates.CAFileName))
+		}
+	}
+
+	return allEnv, nil
 }
 
 func buildConfig(params Params) ([]byte, error) {
@@ -143,15 +179,15 @@ func reconcileAssociationConfig(params Params, configHash hash.Hash) *reconciler
 		return results.WithError(err)
 	}
 
+	secretEnv, err := buildEnv(params)
+
 	expected := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: params.Logstash.Namespace,
 			Name:      ElasticsearchRefSecretName(params.Logstash.Name),
 			Labels:    labels.AddCredentialsLabel(NewLabels(params.Logstash)),
 		},
-		Data: map[string][]byte{
-			ElasticsearchFileName: cfgBytes,
-		},
+		Data: secretEnv,
 	}
 
 	if _, err = reconciler.ReconcileSecret(params.Context, params.Client, expected, &params.Logstash); err != nil {
@@ -227,7 +263,7 @@ func getEsRefNamespacedName(logstash logstashv1alpha1.Logstash) string {
 		namespace = logstash.ElasticsearchRef().Namespace
 	}
 
-	return fmt.Sprintf("%s.%s", namespace, logstash.ElasticsearchRef().Name)
+	return fmt.Sprintf("%s_%s", namespace, logstash.ElasticsearchRef().Name)
 }
 
 func ReconcileConfigMap(

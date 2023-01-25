@@ -112,8 +112,8 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithDockerImage(spec.Image, container.ImageRepository(container.LogstashImage, spec.Version)).
 		WithAutomountServiceAccountToken().
 		WithPorts(ports).
-		WithReadinessProbe(readinessProbe(false)).
-		WithLivenessProbe(livenessProbe(false)).
+		//WithReadinessProbe(readinessProbe(false)).
+		//WithLivenessProbe(livenessProbe(false)).
 		WithVolumeLikes(vols...)
 
 	return builder.PodTemplate, nil
