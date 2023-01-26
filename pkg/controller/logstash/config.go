@@ -51,7 +51,7 @@ func reconcileConfig(params Params, configHash hash.Hash) *reconciler.Results {
 			Labels:    labels.AddCredentialsLabel(NewLabels(params.Logstash)),
 		},
 		Data: map[string][]byte{
-			ConfigFileName: cfgBytes,
+			LogstashConfigFileName: cfgBytes,
 		},
 	}
 
@@ -103,7 +103,7 @@ func getExistingConfig(ctx context.Context, client k8s.Client, logstash logstash
 		return nil, err
 	}
 
-	rawCfg, exists := secret.Data[ConfigFileName]
+	rawCfg, exists := secret.Data[LogstashConfigFileName]
 	if !exists {
 		return nil, nil
 	}
@@ -122,7 +122,7 @@ func getUserConfig(params Params) (*settings.CanonicalConfig, error) {
 	if params.Logstash.Spec.Config != nil {
 		return settings.NewCanonicalConfigFrom(params.Logstash.Spec.Config.Data)
 	}
-	return common.ParseConfigRef(params, &params.Logstash, params.Logstash.Spec.ConfigRef, ConfigFileName)
+	return common.ParseConfigRef(params, &params.Logstash, params.Logstash.Spec.ConfigRef, LogstashConfigFileName)
 }
 
 // TODO: remove testing value

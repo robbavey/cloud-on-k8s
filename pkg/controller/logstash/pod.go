@@ -8,6 +8,7 @@ import (
 	"fmt"
 	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/container"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
@@ -27,7 +28,9 @@ const (
 
 	ConfigVolumeName = "config"
 	ConfigMountPath  = "/usr/share/logstash/config"
-	ConfigFileName   = "logstash.yml"
+
+	LogstashConfigVolumeName = "logstash"
+	LogstashConfigFileName   = "logstash.yml"
 
 	PipelineVolumeName = "pipeline"
 	PipelineFileName   = "pipelines.yml"
@@ -37,7 +40,7 @@ const (
 
 	DataVolumeName            = "logstash-data"
 	DataMountHostPathTemplate = "/var/lib/logstash/%s/%s/data"
-	DataMountPath             = "/usr/share/logstash/data"
+	DataVolumeMountPath       = "/usr/share/logstash/data"
 
 	// ConfigHashAnnotationName is an annotation used to store the Logstash config hash.
 	ConfigHashAnnotationName = "logstash.k8s.elastic.co/config-hash"
@@ -50,7 +53,11 @@ const (
 )
 
 var (
-	defaultResources = corev1.ResourceRequirements{
+	// ConfigVolume is used to propagate the keystore file from the init container to
+	// Logstash main container.
+	ConfigVolume = volume.NewEmptyDirVolume(ConfigVolumeName, ConfigMountPath)
+
+	DefaultResources = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceMemory: resource.MustParse("2Gi"),
 			corev1.ResourceCPU:    resource.MustParse("2000m"),
@@ -67,12 +74,13 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 	spec := &params.Logstash.Spec
 	builder := defaults.NewPodTemplateBuilder(params.GetPodTemplate(), ContainerName)
 	vols := []volume.VolumeLike{
+		ConfigVolume,
 		// volume with logstash configuration file
 		volume.NewSecretVolume(
 			ConfigSecretName(params.Logstash.Name),
-			ConfigVolumeName,
-			path.Join(ConfigMountPath, ConfigFileName),
-			ConfigFileName,
+			LogstashConfigVolumeName,
+			path.Join(ConfigMountPath, LogstashConfigFileName),
+			LogstashConfigFileName,
 			0644),
 		// volume with logstash pipeline file
 		volume.NewSecretVolume(
@@ -106,7 +114,7 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 	ports := getDefaultContainerPorts(params.Logstash)
 
 	builder = builder.
-		WithResources(defaultResources).
+		WithResources(DefaultResources).
 		WithLabels(labels).
 		WithAnnotations(annotations).
 		WithDockerImage(spec.Image, container.ImageRepository(container.LogstashImage, spec.Version)).
@@ -114,7 +122,30 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithPorts(ports).
 		WithReadinessProbe(readinessProbe(false)).
 		WithLivenessProbe(livenessProbe(false)).
-		WithVolumeLikes(vols...)
+		WithVolumeLikes(vols...).
+		WithInitContainers(initConfigContainer())
+
+	//TODO allow keystore create without password
+	if params.KeystoreResources != nil {
+		keystorePass := corev1.EnvVar{Name: "LOGSTASH_KEYSTORE_PASS", Value: "elastic"}
+
+		params.KeystoreResources.InitContainer.Env = append(params.KeystoreResources.InitContainer.Env, keystorePass)
+
+		builder.
+			WithEnv(keystorePass).
+			WithVolumes(params.KeystoreResources.Volume).
+			WithInitContainers(params.KeystoreResources.InitContainer)
+	}
+
+	//TODO integrate with api.ssl.enabled
+	if params.Logstash.Spec.HTTP.TLS.Enabled() {
+		httpVol := certificates.HTTPCertSecretVolume(Namer, params.Logstash.Name)
+		builder.
+			WithVolumes(httpVol.Volume()).
+			WithVolumeMounts(httpVol.VolumeMount())
+	}
+
+	builder.WithInitContainerDefaults()
 
 	return builder.PodTemplate, nil
 }
@@ -146,7 +177,7 @@ func createDataVolume(params Params) volume.VolumeLike {
 	return volume.NewHostVolume(
 		DataVolumeName,
 		dataMountHostPath,
-		DataMountPath,
+		DataVolumeMountPath,
 		false,
 		corev1.HostPathDirectoryOrCreate)
 }

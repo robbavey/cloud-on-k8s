@@ -10,6 +10,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/events"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
 	"hash/fnv"
 
 	"github.com/go-logr/logr"
@@ -39,7 +40,8 @@ type Params struct {
 	Logstash logstashv1alpha1.Logstash
 	Status   logstashv1alpha1.LogstashStatus
 
-	OperatorParams operator.Parameters
+	OperatorParams    operator.Parameters
+	KeystoreResources *keystore.Resources
 }
 
 // K8sClient returns the Kubernetes client.
@@ -125,6 +127,12 @@ func internalReconcile(params Params) (*reconciler.Results, logstashv1alpha1.Log
 
 	if res := reconcilePipeline(params, configHash); res.HasError() {
 		return results.WithResults(res), params.Status
+	}
+
+	if keystoreResources, res := reconcileKeystore(params, configHash); res.HasError() {
+		return results.WithResults(res), params.Status
+	} else if keystoreResources != nil {
+		params.KeystoreResources = keystoreResources
 	}
 
 	// we need to deref the secret here (if any) to include it in the configHash otherwise Logstash will not be rolled on content changes

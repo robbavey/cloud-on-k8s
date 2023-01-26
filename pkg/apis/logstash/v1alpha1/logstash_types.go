@@ -181,6 +181,10 @@ func (l *Logstash) ElasticServiceAccount() (commonv1.ServiceAccountName, error) 
 	return "", nil
 }
 
+func (l *Logstash) SecureSettings() []commonv1.SecretSource {
+	return l.Spec.SecureSettings
+}
+
 func (la *LogstashESAssociation) Associated() commonv1.Associated {
 	if la == nil {
 		return nil
