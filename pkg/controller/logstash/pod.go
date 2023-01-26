@@ -11,6 +11,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/container"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/defaults"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/volume"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
@@ -69,7 +70,7 @@ var (
 	}
 )
 
-func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplateSpec, error) {
+func buildPodTemplate(params Params, configHash hash.Hash32, keystoreResources *keystore.Resources) (corev1.PodTemplateSpec, error) {
 	defer tracing.Span(&params.Context)()
 	spec := &params.Logstash.Spec
 	builder := defaults.NewPodTemplateBuilder(params.GetPodTemplate(), ContainerName)
@@ -126,15 +127,15 @@ func buildPodTemplate(params Params, configHash hash.Hash32) (corev1.PodTemplate
 		WithInitContainers(initConfigContainer())
 
 	//TODO allow keystore create without password
-	if params.KeystoreResources != nil {
+	if keystoreResources != nil {
 		keystorePass := corev1.EnvVar{Name: "LOGSTASH_KEYSTORE_PASS", Value: "elastic"}
 
-		params.KeystoreResources.InitContainer.Env = append(params.KeystoreResources.InitContainer.Env, keystorePass)
+		keystoreResources.InitContainer.Env = append(keystoreResources.InitContainer.Env, keystorePass)
 
 		builder.
 			WithEnv(keystorePass).
-			WithVolumes(params.KeystoreResources.Volume).
-			WithInitContainers(params.KeystoreResources.InitContainer)
+			WithVolumes(keystoreResources.Volume).
+			WithInitContainers(keystoreResources.InitContainer)
 	}
 
 	//TODO integrate with api.ssl.enabled

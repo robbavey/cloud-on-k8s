@@ -135,8 +135,22 @@ type LogstashESAssociation struct {
 	*Logstash
 }
 
+var _ commonv1.Associated = &Logstash{}
+
 func (l *Logstash) ServiceAccountName() string {
 	return l.Spec.ServiceAccountName
+}
+
+func (l *Logstash) GetAssociations() []commonv1.Association {
+	associations := make([]commonv1.Association, 0)
+
+	if l.Spec.ElasticsearchRef.IsDefined() {
+		associations = append(associations, &LogstashESAssociation{
+			Logstash: l,
+		})
+	}
+
+	return associations
 }
 
 func (l *Logstash) AssociationStatusMap(typ commonv1.AssociationType) commonv1.AssociationStatusMap {
@@ -165,24 +179,10 @@ func (l *Logstash) SetAssociationStatusMap(typ commonv1.AssociationType, status 
 	}
 }
 
-func (l *Logstash) GetAssociations() []commonv1.Association {
-	associations := make([]commonv1.Association, 0)
+var _ commonv1.Association = &LogstashESAssociation{}
 
-	if l.Spec.ElasticsearchRef.IsDefined() {
-		associations = append(associations, &LogstashESAssociation{
-			Logstash: l,
-		})
-	}
-
-	return associations
-}
-
-func (l *Logstash) ElasticServiceAccount() (commonv1.ServiceAccountName, error) {
+func (la *LogstashESAssociation) ElasticServiceAccount() (commonv1.ServiceAccountName, error) {
 	return "", nil
-}
-
-func (l *Logstash) SecureSettings() []commonv1.SecretSource {
-	return l.Spec.SecureSettings
 }
 
 func (la *LogstashESAssociation) Associated() commonv1.Associated {
@@ -219,8 +219,9 @@ func (la *LogstashESAssociation) AssociationID() string {
 	return commonv1.SingletonAssociationID
 }
 
-var _ commonv1.Associated = &Logstash{}
-var _ commonv1.Association = &LogstashESAssociation{}
+func (l *Logstash) SecureSettings() []commonv1.SecretSource {
+	return l.Spec.SecureSettings
+}
 
 // IsMarkedForDeletion returns true if the Logstash is going to be deleted
 func (l *Logstash) IsMarkedForDeletion() bool {

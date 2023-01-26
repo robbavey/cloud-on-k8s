@@ -42,6 +42,7 @@ echo "Logstash configuration successfully prepared."
 
 // initConfigContainer returns an init container that executes a bash script to prepare the logstash config directory.
 // The script copy config files from /use/share/logstash/config to /mnt/elastic-internal/logstash-config/
+// TODO may be able to solve env2yaml permission issue with initContainer
 func initConfigContainer() corev1.Container {
 	privileged := false
 

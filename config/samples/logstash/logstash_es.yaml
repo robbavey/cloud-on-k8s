@@ -40,6 +40,7 @@ spec:
           } 
         }
         output { stdout{} }
+# keystore init container
   secureSettings:
     - secretName: logstash-secret-settings
   deployment:

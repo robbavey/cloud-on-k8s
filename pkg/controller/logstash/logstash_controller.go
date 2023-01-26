@@ -78,19 +78,22 @@ func addWatches(c controller.Controller, r *ReconcileLogstash) error {
 		return err
 	}
 
-	// Watch Secrets
-	if err := c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
+	// Watch services
+	if err := c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &logstashv1alpha1.Logstash{},
 	}); err != nil {
 		return err
 	}
 
-	// Watch services
-	if err := c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+	// Watch owned and soft-owned secrets
+	if err := c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &logstashv1alpha1.Logstash{},
 	}); err != nil {
+		return err
+	}
+	if err := watches.WatchSoftOwnedSecrets(c, logstashv1alpha1.Kind); err != nil {
 		return err
 	}
 
@@ -127,8 +130,7 @@ func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Req
 	logstash := &logstashv1alpha1.Logstash{}
 	if err := r.Client.Get(ctx, request.NamespacedName, logstash); err != nil {
 		if apierrors.IsNotFound(err) {
-			r.onDelete(request.NamespacedName)
-			return reconcile.Result{}, nil
+			return reconcile.Result{}, r.onDelete(ctx, request.NamespacedName)
 		}
 		return reconcile.Result{}, tracing.CaptureError(ctx, err)
 	}
@@ -199,7 +201,8 @@ func (r *ReconcileLogstash) validate(ctx context.Context, logstash logstashv1alp
 	return nil
 }
 
-func (r *ReconcileLogstash) onDelete(obj types.NamespacedName) {
+func (r *ReconcileLogstash) onDelete(ctx context.Context, obj types.NamespacedName) error {
 	r.dynamicWatches.Secrets.RemoveHandlerForKey(keystore.SecureSettingsWatchName(obj))
 	r.dynamicWatches.Secrets.RemoveHandlerForKey(common.ConfigRefWatchName(obj))
+	return reconciler.GarbageCollectSoftOwnedSecrets(ctx, r.Client, obj, logstashv1alpha1.Kind)
 }
