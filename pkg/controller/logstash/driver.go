@@ -59,7 +59,11 @@ func (p Params) DynamicWatches() watches.DynamicWatches {
 
 // GetPodTemplate returns the configured pod template for the associated Elastic Logstash.
 func (p *Params) GetPodTemplate() corev1.PodTemplateSpec {
-	return p.Logstash.Spec.Deployment.PodTemplate
+	if p.Logstash.Spec.Deployment != nil {
+		return p.Logstash.Spec.Deployment.PodTemplate
+	} else {
+		return p.Logstash.Spec.StatefulSet.PodTemplate
+	}
 }
 
 // Logger returns the configured logger for use during reconciliation.

@@ -6,6 +6,7 @@ package logstash
 
 import (
 	"context"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/sset"
 	"reflect"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,6 +35,8 @@ func reconcilePodVehicle(params Params, podTemplate corev1.PodTemplateSpec) (*re
 	switch {
 	case spec.Deployment != nil:
 		reconciliationFunc = reconcileDeployment
+	case spec.StatefulSet != nil:
+		reconciliationFunc = reconcileStatefulSet
 	}
 
 	ready, desired, err := reconciliationFunc(ReconciliationParams{
@@ -71,6 +74,30 @@ func reconcileDeployment(rp ReconciliationParams) (int32, int32, error) {
 	}
 
 	reconciled, err := deployment.Reconcile(rp.ctx, rp.client, d, &rp.logstash)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return reconciled.Status.ReadyReplicas, reconciled.Status.Replicas, nil
+}
+
+func reconcileStatefulSet(rp ReconciliationParams) (int32, int32, error) {
+	s, _ := sset.New(sset.Params{
+		Name:                 Name(rp.logstash.Name),
+		Namespace:            rp.logstash.Namespace,
+		ServiceName:          HTTPServiceName(rp.logstash.Name),
+		Selector:             NewLabels(rp.logstash),
+		Labels:               NewLabels(rp.logstash),
+		PodTemplateSpec:      rp.podTemplate,
+		VolumeClaimTemplates: rp.logstash.Spec.StatefulSet.VolumeClaimTemplates,
+		Replicas:             pointer.Int32OrDefault(rp.logstash.Spec.StatefulSet.Replicas, int32(1)),
+		RevisionHistoryLimit: rp.logstash.Spec.RevisionHistoryLimit,
+	})
+	if err := controllerutil.SetControllerReference(&rp.logstash, &s, scheme.Scheme); err != nil {
+		return 0, 0, err
+	}
+
+	reconciled, err := sset.Reconcile(rp.ctx, rp.client, s, &rp.logstash)
 	if err != nil {
 		return 0, 0, err
 	}

@@ -12,7 +12,6 @@ const (
 	httpServiceSuffix = "http"
 	configSuffix      = "config"
 	pipelineSuffix    = "pipeline"
-	deploymentSuffix  = "deployment"
 	esRefSuffix       = "es-ref"
 )
 
@@ -44,22 +43,4 @@ func Name(name string) string {
 // HTTPServiceName returns the name of the HTTP service for a given Logstash name.
 func HTTPServiceName(name string) string {
 	return Namer.Suffix(name, httpServiceSuffix)
-}
-
-// EnvVarsSecretName returns the name of the secret used to storage environmental variables
-// for a given Logstash name.
-func EnvVarsSecretName(name string) string {
-	return Namer.Suffix(name, "envvars")
-}
-
-func DeploymentName(name string) string {
-	return Namer.Suffix(name, deploymentSuffix)
-}
-
-func ConfigName(name string) string {
-	return Namer.Suffix(name, configSuffix)
-}
-
-func PipelineName(name string) string {
-	return Namer.Suffix(name, pipelineSuffix)
 }

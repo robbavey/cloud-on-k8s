@@ -93,7 +93,7 @@ func getExistingConfig(ctx context.Context, client k8s.Client, logstash logstash
 	var secret corev1.Secret
 	key := types.NamespacedName{
 		Namespace: logstash.Namespace,
-		Name:      ConfigName(logstash.Name),
+		Name:      ConfigSecretName(logstash.Name),
 	}
 	err := client.Get(context.Background(), key, &secret)
 	if err != nil && apierrors.IsNotFound(err) {
@@ -311,7 +311,7 @@ func getExistingPipeline(ctx context.Context, client k8s.Client, logstash logsta
 	var secret corev1.Secret
 	key := types.NamespacedName{
 		Namespace: logstash.Namespace,
-		Name:      PipelineName(logstash.Name),
+		Name:      PipelineSecretName(logstash.Name),
 	}
 	err := client.Get(context.Background(), key, &secret)
 	if err != nil && apierrors.IsNotFound(err) {

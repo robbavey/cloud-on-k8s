@@ -14,6 +14,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/volume"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/sset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
 	"hash"
 	corev1 "k8s.io/api/core/v1"
@@ -38,10 +39,6 @@ const (
 
 	ElasticsearchVolumeName = "elasticsearch-ref"
 	ElasticsearchFileName   = "elasticsearch-ref.yml"
-
-	DataVolumeName            = "logstash-data"
-	DataMountHostPathTemplate = "/var/lib/logstash/%s/%s/data"
-	DataVolumeMountPath       = "/usr/share/logstash/data"
 
 	// ConfigHashAnnotationName is an annotation used to store the Logstash config hash.
 	ConfigHashAnnotationName = "logstash.k8s.elastic.co/config-hash"
@@ -148,6 +145,11 @@ func buildPodTemplate(params Params, configHash hash.Hash32, keystoreResources *
 
 	builder.WithInitContainerDefaults()
 
+	// add default volumeMount for PVC if not defined in spec
+	if params.Logstash.Spec.StatefulSet != nil {
+		builder.WithVolumeMounts(sset.DefaultDataVolumeMount)
+	}
+
 	return builder.PodTemplate, nil
 }
 
@@ -170,17 +172,6 @@ func getVolumesFromAssociations(associations []commonv1.Association) ([]volume.V
 		))
 	}
 	return vols, nil
-}
-
-func createDataVolume(params Params) volume.VolumeLike {
-	dataMountHostPath := fmt.Sprintf(DataMountHostPathTemplate, params.Logstash.Namespace, params.Logstash.Name)
-
-	return volume.NewHostVolume(
-		DataVolumeName,
-		dataMountHostPath,
-		DataVolumeMountPath,
-		false,
-		corev1.HostPathDirectoryOrCreate)
 }
 
 func certificatesDir(association commonv1.Association) string {

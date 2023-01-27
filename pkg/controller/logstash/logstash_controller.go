@@ -72,6 +72,16 @@ func addWatches(c controller.Controller, r *ReconcileLogstash) error {
 		return err
 	}
 
+	// Watch StatefulSets
+	if err := c.Watch(
+		&source.Kind{Type: &appsv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &logstashv1alpha1.Logstash{},
+		},
+	); err != nil {
+		return err
+	}
+
 	// Watch Pods, to ensure `status.version` is correctly reconciled on any change.
 	// Watching Deployments or DaemonSets only may lead to missing some events.
 	if err := watches.WatchPods(c, NameLabelName); err != nil {
@@ -115,11 +125,12 @@ type ReconcileLogstash struct {
 
 // Reconcile reads that state of the cluster for a Logstash object and makes changes based on the state read
 // and what is in the Logstash.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=logstash.k8s.elastic.co,resources=logstashes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=logstash.k8s.elastic.co,resources=logstashes/status,verbs=get;update;patch
 func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Request) (reconcile.Result, error) {
