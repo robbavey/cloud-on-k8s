@@ -47,7 +47,7 @@ func reconcileConfig(params Params, configHash hash.Hash) *reconciler.Results {
 	expected := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: params.Logstash.Namespace,
-			Name:      ConfigSecretName(params.Logstash.Name),
+			Name:      logstashv1alpha1.ConfigSecretName(params.Logstash.Name),
 			Labels:    labels.AddCredentialsLabel(NewLabels(params.Logstash)),
 		},
 		Data: map[string][]byte{
@@ -93,7 +93,7 @@ func getExistingConfig(ctx context.Context, client k8s.Client, logstash logstash
 	var secret corev1.Secret
 	key := types.NamespacedName{
 		Namespace: logstash.Namespace,
-		Name:      ConfigSecretName(logstash.Name),
+		Name:      logstashv1alpha1.ConfigSecretName(logstash.Name),
 	}
 	err := client.Get(context.Background(), key, &secret)
 	if err != nil && apierrors.IsNotFound(err) {
@@ -146,7 +146,7 @@ func reconcileAssociationConfig(params Params, configHash hash.Hash) *reconciler
 	expected := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: params.Logstash.Namespace,
-			Name:      ElasticsearchRefSecretName(params.Logstash.Name),
+			Name:      logstashv1alpha1.ElasticsearchRefSecretName(params.Logstash.Name),
 			Labels:    labels.AddCredentialsLabel(NewLabels(params.Logstash)),
 		},
 		Data: map[string][]byte{
@@ -266,7 +266,7 @@ func reconcilePipeline(params Params, configHash hash.Hash) *reconciler.Results 
 	expected := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: params.Logstash.Namespace,
-			Name:      PipelineSecretName(params.Logstash.Name),
+			Name:      logstashv1alpha1.PipelineSecretName(params.Logstash.Name),
 			Labels:    labels.AddCredentialsLabel(NewLabels(params.Logstash)),
 		},
 		Data: map[string][]byte{
@@ -311,7 +311,7 @@ func getExistingPipeline(ctx context.Context, client k8s.Client, logstash logsta
 	var secret corev1.Secret
 	key := types.NamespacedName{
 		Namespace: logstash.Namespace,
-		Name:      PipelineSecretName(logstash.Name),
+		Name:      logstashv1alpha1.PipelineSecretName(logstash.Name),
 	}
 	err := client.Get(context.Background(), key, &secret)
 	if err != nil && apierrors.IsNotFound(err) {

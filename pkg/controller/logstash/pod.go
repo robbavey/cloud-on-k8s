@@ -14,7 +14,9 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/volume"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/network"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/sset"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/stackmon"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
 	"hash"
 	corev1 "k8s.io/api/core/v1"
@@ -45,9 +47,6 @@ const (
 
 	// VersionLabelName is a label used to track the version of a Logstash Pod.
 	VersionLabelName = "logstash.k8s.elastic.co/version"
-
-	// HTTPPort is the (default) API port used by Logstash
-	HTTPPort = 9600
 )
 
 var (
@@ -75,20 +74,21 @@ func buildPodTemplate(params Params, configHash hash.Hash32, keystoreResources *
 		ConfigVolume,
 		// volume with logstash configuration file
 		volume.NewSecretVolume(
-			ConfigSecretName(params.Logstash.Name),
+			logstashv1alpha1.ConfigSecretName(params.Logstash.Name),
 			LogstashConfigVolumeName,
 			path.Join(ConfigMountPath, LogstashConfigFileName),
 			LogstashConfigFileName,
 			0644),
 		// volume with logstash pipeline file
 		volume.NewSecretVolume(
-			PipelineSecretName(params.Logstash.Name),
+			logstashv1alpha1.PipelineSecretName(params.Logstash.Name),
 			PipelineVolumeName,
 			path.Join(ConfigMountPath, PipelineFileName),
 			PipelineFileName,
 			0644),
+		// volume with elasticsearch-ref file
 		volume.NewSecretVolume(
-			ElasticsearchRefSecretName(params.Logstash.Name),
+			logstashv1alpha1.ElasticsearchRefSecretName(params.Logstash.Name),
 			ElasticsearchVolumeName,
 			path.Join(ConfigMountPath, ElasticsearchFileName),
 			ElasticsearchFileName,
@@ -123,6 +123,11 @@ func buildPodTemplate(params Params, configHash hash.Hash32, keystoreResources *
 		WithVolumeLikes(vols...).
 		WithInitContainers(initConfigContainer())
 
+	builder, err = stackmon.WithMonitoring(params.Context, params.Client, builder, params.Logstash)
+	if err != nil {
+		return corev1.PodTemplateSpec{}, err
+	}
+
 	//TODO allow keystore create without password
 	if keystoreResources != nil {
 		keystorePass := corev1.EnvVar{Name: "LOGSTASH_KEYSTORE_PASS", Value: "elastic"}
@@ -137,7 +142,7 @@ func buildPodTemplate(params Params, configHash hash.Hash32, keystoreResources *
 
 	//TODO integrate with api.ssl.enabled
 	if params.Logstash.Spec.HTTP.TLS.Enabled() {
-		httpVol := certificates.HTTPCertSecretVolume(Namer, params.Logstash.Name)
+		httpVol := certificates.HTTPCertSecretVolume(logstashv1alpha1.Namer, params.Logstash.Name)
 		builder.
 			WithVolumes(httpVol.Volume()).
 			WithVolumeMounts(httpVol.VolumeMount())
@@ -186,7 +191,7 @@ func certificatesDir(association commonv1.Association) string {
 
 func getDefaultContainerPorts(logstash logstashv1alpha1.Logstash) []corev1.ContainerPort {
 	return []corev1.ContainerPort{
-		{Name: logstash.Spec.HTTP.Protocol(), ContainerPort: int32(HTTPPort), Protocol: corev1.ProtocolTCP},
+		{Name: logstash.Spec.HTTP.Protocol(), ContainerPort: int32(network.HTTPPort), Protocol: corev1.ProtocolTCP},
 	}
 }
 
@@ -204,7 +209,7 @@ func readinessProbe(useTLS bool) corev1.Probe {
 		TimeoutSeconds:      5,
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
-				Port:   intstr.FromInt(HTTPPort),
+				Port:   intstr.FromInt(network.HTTPPort),
 				Path:   "/",
 				Scheme: scheme,
 			},
@@ -226,7 +231,7 @@ func livenessProbe(useTLS bool) corev1.Probe {
 		TimeoutSeconds:      5,
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
-				Port:   intstr.FromInt(HTTPPort),
+				Port:   intstr.FromInt(network.HTTPPort),
 				Path:   "/",
 				Scheme: scheme,
 			},

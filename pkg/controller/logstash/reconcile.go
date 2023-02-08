@@ -60,7 +60,7 @@ func reconcilePodVehicle(params Params, podTemplate corev1.PodTemplateSpec) (*re
 
 func reconcileDeployment(rp ReconciliationParams) (int32, int32, error) {
 	d := deployment.New(deployment.Params{
-		Name:                 Name(rp.logstash.Name),
+		Name:                 logstashv1alpha1.Name(rp.logstash.Name),
 		Namespace:            rp.logstash.Namespace,
 		Selector:             NewLabels(rp.logstash),
 		Labels:               NewLabels(rp.logstash),
@@ -83,9 +83,9 @@ func reconcileDeployment(rp ReconciliationParams) (int32, int32, error) {
 
 func reconcileStatefulSet(rp ReconciliationParams) (int32, int32, error) {
 	s, _ := sset.New(sset.Params{
-		Name:                 Name(rp.logstash.Name),
+		Name:                 logstashv1alpha1.Name(rp.logstash.Name),
 		Namespace:            rp.logstash.Namespace,
-		ServiceName:          HTTPServiceName(rp.logstash.Name),
+		ServiceName:          logstashv1alpha1.HTTPServiceName(rp.logstash.Name),
 		Selector:             NewLabels(rp.logstash),
 		Labels:               NewLabels(rp.logstash),
 		PodTemplateSpec:      rp.podTemplate,

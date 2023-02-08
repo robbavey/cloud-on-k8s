@@ -5,6 +5,7 @@
 package logstash
 
 import (
+	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
@@ -52,7 +53,7 @@ func reconcileKeystore(params Params, configHash hash.Hash) (*keystore.Resources
 		params.Context,
 		params,
 		&params.Logstash,
-		Namer,
+		logstashv1alpha1.Namer,
 		NewLabels(params.Logstash),
 		initContainersParameters,
 	)

@@ -589,6 +589,7 @@ Monitoring holds references to both the metrics, and logs Elasticsearch clusters
 - xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-beat-v1beta1-beatspec[$$BeatSpec$$]
 - xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-elasticsearch-v1-elasticsearchspec[$$ElasticsearchSpec$$]
 - xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-kibana-v1-kibanaspec[$$KibanaSpec$$]
+- xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-logstash-v1alpha1-logstashspec[$$LogstashSpec$$]
 ****
 
 [cols="25a,75a", options="header"]
@@ -1902,6 +1903,7 @@ LogstashSpec defines the desired state of Logstash
 | *`statefulSet`* __xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-logstash-v1alpha1-statefulsetspec[$$StatefulSetSpec$$]__ | StatefulSet specifies the Logstash should be deployed as a StatefulSet, and allows providing its spec. Cannot be used along with `Deployment`.
 | *`revisionHistoryLimit`* __integer__ | RevisionHistoryLimit is the number of revisions to retain to allow rollback in the underlying DaemonSet or Deployment.
 | *`http`* __xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-common-v1-httpconfig[$$HTTPConfig$$]__ | HTTP holds the HTTP layer configuration for the Agent in Fleet mode with Fleet Server enabled.
+| *`monitoring`* __xref:{anchor_prefix}-github-com-elastic-cloud-on-k8s-v2-pkg-apis-common-v1-monitoring[$$Monitoring$$]__ | Monitoring enables you to collect and ship log and monitoring data of this Logstash. See https://www.elastic.co/guide/en/kibana/current/xpack-monitoring.html. Metricbeat and Filebeat are deployed in the same Pod as sidecars and each one sends data to one or two different Elasticsearch monitoring clusters running in the same Kubernetes cluster.
 |===
 
 

@@ -2,7 +2,7 @@
 // or more contributor license agreements. Licensed under the Elastic License 2.0;
 // you may not use this file except in compliance with the Elastic License 2.0.
 
-package logstash
+package v1alpha1
 
 import (
 	common_name "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/name"
@@ -24,7 +24,7 @@ func ConfigSecretName(name string) string {
 }
 
 func ConfigMapName(name string) string {
-	return Namer.Suffix(name, "cm")
+	return Namer.Suffix(name, "configmap")
 }
 
 func PipelineSecretName(name string) string {
