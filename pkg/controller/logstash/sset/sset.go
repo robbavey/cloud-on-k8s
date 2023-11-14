@@ -24,6 +24,7 @@ type Params struct {
 	ServiceName          string
 	Selector             map[string]string
 	Labels               map[string]string
+	UpdateStrategy       appsv1.StatefulSetUpdateStrategy
 	PodTemplateSpec      corev1.PodTemplateSpec
 	VolumeClaimTemplates []corev1.PersistentVolumeClaim
 	Replicas             int32
@@ -38,9 +39,7 @@ func New(params Params) appsv1.StatefulSet {
 			Labels:    params.Labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type: appsv1.RollingUpdateStatefulSetStrategyType,
-			},
+			UpdateStrategy: params.UpdateStrategy,
 			// we don't care much about pods creation ordering, and manage deletion ordering ourselves,
 			// so we're fine with the StatefulSet controller spawning all pods in parallel
 			PodManagementPolicy:  appsv1.ParallelPodManagement,
