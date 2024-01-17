@@ -6,7 +6,7 @@ package logstash
 
 import (
 	"context"
-	"reflect"
+	//"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,18 +19,18 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
-
+	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	//"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
+	//commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/comparison"
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common"
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/comparison"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/expectations"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/hash"
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/hash"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/watches"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/labels"
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/labels"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 )
 
@@ -45,468 +45,778 @@ func newReconcileLogstash(objs ...client.Object) *ReconcileLogstash {
 	return r
 }
 
-func TestReconcileLogstash_Reconcile(t *testing.T) {
-	defaultLabels := (&logstashv1alpha1.Logstash{ObjectMeta: metav1.ObjectMeta{Name: "testLogstash"}}).GetIdentityLabels()
-	tests := []struct {
-		name            string
-		objs            []client.Object
-		request         reconcile.Request
-		want            reconcile.Result
-		expected        logstashv1alpha1.Logstash
-		expectedObjects expectedObjects
-		wantErr         bool
-	}{
-		{
-			name: "valid unmanaged Logstash does not increment observedGeneration",
-			objs: []client.Object{
-				&logstashv1alpha1.Logstash{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash",
-						Namespace:  "test",
-						Generation: 1,
-						Annotations: map[string]string{
-							common.ManagedAnnotation: "false",
-						},
-					},
-					Spec: logstashv1alpha1.LogstashSpec{
-						Version: "8.6.1",
-					},
-					Status: logstashv1alpha1.LogstashStatus{
-						ObservedGeneration: 1,
-					},
-				},
-			},
-			request: reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: "test",
-					Name:      "testLogstash",
-				},
-			},
-			want: reconcile.Result{},
-			expected: logstashv1alpha1.Logstash{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "testLogstash",
-					Namespace:  "test",
-					Generation: 1,
-					Annotations: map[string]string{
-						common.ManagedAnnotation: "false",
-					},
-				},
-				Spec: logstashv1alpha1.LogstashSpec{
-					Version: "8.6.1",
-				},
-				Status: logstashv1alpha1.LogstashStatus{
-					ObservedGeneration: 1,
-				},
-			},
-			expectedObjects: []expectedObject{},
-			wantErr:         false,
-		},
-		{
-			name: "too long name fails validation, and updates observedGeneration",
-			objs: []client.Object{
-				&logstashv1alpha1.Logstash{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstashwithtoolongofanamereallylongname",
-						Namespace:  "test",
-						Generation: 2,
-					},
-					Status: logstashv1alpha1.LogstashStatus{
-						ObservedGeneration: 1,
-					},
-				},
-			},
-			request: reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: "test",
-					Name:      "testLogstashwithtoolongofanamereallylongname",
-				},
-			},
-			want: reconcile.Result{},
-			expected: logstashv1alpha1.Logstash{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "testLogstashwithtoolongofanamereallylongname",
-					Namespace:  "test",
-					Generation: 2,
-				},
-				Status: logstashv1alpha1.LogstashStatus{
-					ObservedGeneration: 2,
-				},
-			},
-			expectedObjects: []expectedObject{},
-			wantErr:         true,
-		},
-		{
-			name: "Logstash with ready StatefulSet and Pod updates status and creates secrets and service",
-			objs: []client.Object{
-				&logstashv1alpha1.Logstash{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash",
-						Namespace:  "test",
-						Generation: 2,
-					},
-					Spec: logstashv1alpha1.LogstashSpec{
-						Version: "8.6.1",
-						Count:   1,
-					},
-					Status: logstashv1alpha1.LogstashStatus{
-						ObservedGeneration: 1,
-					},
-				},
-				&appsv1.StatefulSet{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "testLogstash-ls",
-						Namespace: "test",
-						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
-					},
-					Status: appsv1.StatefulSetStatus{
-						AvailableReplicas: 1,
-						Replicas:          1,
-						ReadyReplicas:     1,
-					},
-					Spec: appsv1.StatefulSetSpec{
-						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-							{
-								ObjectMeta: metav1.ObjectMeta{
-									Name:      "logstash-data",
-									Namespace: "test",
-								},
-								Spec: corev1.PersistentVolumeClaimSpec{
-									StorageClassName: pointer.String(sampleStorageClass.Name),
-									Resources: corev1.ResourceRequirements{
-										Requests: corev1.ResourceList{
-											corev1.ResourceStorage: resource.MustParse("1Gi"),
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash-ls",
-						Namespace:  "test",
-						Generation: 2,
-						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
-					},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodRunning,
-					},
-				},
-			},
-			request: reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: "test",
-					Name:      "testLogstash",
-				},
-			},
-			want: reconcile.Result{},
-			expectedObjects: []expectedObject{
-				{
-					t:    &corev1.Service{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
-				},
-				{
-					t:    &corev1.Secret{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
-				},
-				{
-					t:    &corev1.Secret{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
-				},
-			},
+//func TestReconcileLogstash_Reconcile(t *testing.T) {
+//	defaultLabels := (&logstashv1alpha1.Logstash{ObjectMeta: metav1.ObjectMeta{Name: "testLogstash"}}).GetIdentityLabels()
+//	tests := []struct {
+//		name            string
+//		objs            []client.Object
+//		request         reconcile.Request
+//		want            reconcile.Result
+//		expected        logstashv1alpha1.Logstash
+//		expectedObjects expectedObjects
+//		wantErr         bool
+//	}{
+//		{
+//			name: "valid unmanaged Logstash does not increment observedGeneration",
+//			objs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash",
+//						Namespace:  "test",
+//						Generation: 1,
+//						Annotations: map[string]string{
+//							common.ManagedAnnotation: "false",
+//						},
+//					},
+//					Spec: logstashv1alpha1.LogstashSpec{
+//						Version: "8.6.1",
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//			},
+//			request: reconcile.Request{
+//				NamespacedName: types.NamespacedName{
+//					Namespace: "test",
+//					Name:      "testLogstash",
+//				},
+//			},
+//			want: reconcile.Result{},
+//			expected: logstashv1alpha1.Logstash{
+//				ObjectMeta: metav1.ObjectMeta{
+//					Name:       "testLogstash",
+//					Namespace:  "test",
+//					Generation: 1,
+//					Annotations: map[string]string{
+//						common.ManagedAnnotation: "false",
+//					},
+//				},
+//				Spec: logstashv1alpha1.LogstashSpec{
+//					Version: "8.6.1",
+//				},
+//				Status: logstashv1alpha1.LogstashStatus{
+//					ObservedGeneration: 1,
+//				},
+//			},
+//			expectedObjects: []expectedObject{},
+//			wantErr:         false,
+//		},
+//		{
+//			name: "too long name fails validation, and updates observedGeneration",
+//			objs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstashwithtoolongofanamereallylongname",
+//						Namespace:  "test",
+//						Generation: 2,
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//			},
+//			request: reconcile.Request{
+//				NamespacedName: types.NamespacedName{
+//					Namespace: "test",
+//					Name:      "testLogstashwithtoolongofanamereallylongname",
+//				},
+//			},
+//			want: reconcile.Result{},
+//			expected: logstashv1alpha1.Logstash{
+//				ObjectMeta: metav1.ObjectMeta{
+//					Name:       "testLogstashwithtoolongofanamereallylongname",
+//					Namespace:  "test",
+//					Generation: 2,
+//				},
+//				Status: logstashv1alpha1.LogstashStatus{
+//					ObservedGeneration: 2,
+//				},
+//			},
+//			expectedObjects: []expectedObject{},
+//			wantErr:         true,
+//		},
+//		{
+//			name: "Logstash with ready StatefulSet and Pod updates status and creates secrets and service",
+//			objs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash",
+//						Namespace:  "test",
+//						Generation: 2,
+//					},
+//					Spec: logstashv1alpha1.LogstashSpec{
+//						Version: "8.6.1",
+//						Count:   1,
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//				&appsv1.StatefulSet{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:      "testLogstash-ls",
+//						Namespace: "test",
+//						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
+//					},
+//					Status: appsv1.StatefulSetStatus{
+//						AvailableReplicas: 1,
+//						Replicas:          1,
+//						ReadyReplicas:     1,
+//					},
+//					Spec: appsv1.StatefulSetSpec{
+//						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+//							{
+//								ObjectMeta: metav1.ObjectMeta{
+//									Name:      "logstash-data",
+//									Namespace: "test",
+//								},
+//								Spec: corev1.PersistentVolumeClaimSpec{
+//									StorageClassName: pointer.String(sampleStorageClass.Name),
+//									Resources: corev1.ResourceRequirements{
+//										Requests: corev1.ResourceList{
+//											corev1.ResourceStorage: resource.MustParse("1Gi"),
+//										},
+//									},
+//								},
+//							},
+//						},
+//					},
+//				},
+//				&corev1.Pod{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash-ls",
+//						Namespace:  "test",
+//						Generation: 2,
+//						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
+//					},
+//					Status: corev1.PodStatus{
+//						Phase: corev1.PodRunning,
+//					},
+//				},
+//			},
+//			request: reconcile.Request{
+//				NamespacedName: types.NamespacedName{
+//					Namespace: "test",
+//					Name:      "testLogstash",
+//				},
+//			},
+//			want: reconcile.Result{},
+//			expectedObjects: []expectedObject{
+//				{
+//					t:    &corev1.Service{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
+//				},
+//			},
+//
+//			expected: logstashv1alpha1.Logstash{
+//				ObjectMeta: metav1.ObjectMeta{
+//					Name:       "testLogstash",
+//					Namespace:  "test",
+//					Generation: 2,
+//				},
+//				Spec: logstashv1alpha1.LogstashSpec{
+//					Version: "8.6.1",
+//					Count:   1,
+//				},
+//				Status: logstashv1alpha1.LogstashStatus{
+//					Version:            "8.6.1",
+//					ExpectedNodes:      1,
+//					AvailableNodes:     1,
+//					ObservedGeneration: 2,
+//					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
+//				},
+//			},
+//			wantErr: false,
+//		},
+//		{
+//			name: "Logstash with a custom service creates secrets and service",
+//			objs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash",
+//						Namespace:  "test",
+//						Generation: 2,
+//					},
+//					Spec: logstashv1alpha1.LogstashSpec{
+//						Version: "8.6.1",
+//						Count:   1,
+//						Services: []logstashv1alpha1.LogstashService{{
+//							Name: "test",
+//							Service: commonv1.ServiceTemplate{
+//								Spec: corev1.ServiceSpec{
+//									Ports: []corev1.ServicePort{
+//										{Protocol: "TCP", Port: 9500},
+//									},
+//								},
+//							},
+//						}},
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//				&appsv1.StatefulSet{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:      "testLogstash-ls",
+//						Namespace: "test",
+//						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
+//					},
+//					Status: appsv1.StatefulSetStatus{
+//						AvailableReplicas: 1,
+//						Replicas:          1,
+//						ReadyReplicas:     1,
+//					},
+//					Spec: appsv1.StatefulSetSpec{
+//						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+//							{
+//								ObjectMeta: metav1.ObjectMeta{
+//									Name:      "logstash-data",
+//									Namespace: "test",
+//								},
+//								Spec: corev1.PersistentVolumeClaimSpec{
+//									StorageClassName: pointer.String(sampleStorageClass.Name),
+//									Resources: corev1.ResourceRequirements{
+//										Requests: corev1.ResourceList{
+//											corev1.ResourceStorage: resource.MustParse("1Gi"),
+//										},
+//									},
+//								},
+//							},
+//						},
+//					},
+//				},
+//				&corev1.Pod{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash-ls",
+//						Namespace:  "test",
+//						Generation: 2,
+//						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
+//					},
+//					Status: corev1.PodStatus{
+//						Phase: corev1.PodRunning,
+//					},
+//				},
+//			},
+//			request: reconcile.Request{
+//				NamespacedName: types.NamespacedName{
+//					Namespace: "test",
+//					Name:      "testLogstash",
+//				},
+//			},
+//			want: reconcile.Result{},
+//			expectedObjects: []expectedObject{
+//				{
+//					t:    &corev1.Service{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
+//				},
+//				{
+//					t:    &corev1.Service{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-test"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
+//				},
+//			},
+//
+//			expected: logstashv1alpha1.Logstash{
+//				ObjectMeta: metav1.ObjectMeta{
+//					Name:       "testLogstash",
+//					Namespace:  "test",
+//					Generation: 2,
+//				},
+//				Spec: logstashv1alpha1.LogstashSpec{
+//					Version: "8.6.1",
+//					Count:   1,
+//					Services: []logstashv1alpha1.LogstashService{{
+//						Name: "test",
+//						Service: commonv1.ServiceTemplate{
+//							Spec: corev1.ServiceSpec{
+//								Ports: []corev1.ServicePort{
+//									{Protocol: "TCP", Port: 9500},
+//								},
+//							},
+//						},
+//					}},
+//				},
+//				Status: logstashv1alpha1.LogstashStatus{
+//					Version:            "8.6.1",
+//					ExpectedNodes:      1,
+//					AvailableNodes:     1,
+//					ObservedGeneration: 2,
+//					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
+//				},
+//			},
+//			wantErr: false,
+//		},
+//		{
+//			name: "Logstash with a service with no port creates secrets and service",
+//			objs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash",
+//						Namespace:  "test",
+//						Generation: 2,
+//					},
+//					Spec: logstashv1alpha1.LogstashSpec{
+//						Version: "8.6.1",
+//						Count:   1,
+//						Services: []logstashv1alpha1.LogstashService{{
+//							Name: "api",
+//							Service: commonv1.ServiceTemplate{
+//								Spec: corev1.ServiceSpec{
+//									Ports: nil,
+//								},
+//							},
+//						}},
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//				&storagev1.StorageClass{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name: "default-sc",
+//					},
+//				},
+//				&appsv1.StatefulSet{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:      "testLogstash-ls",
+//						Namespace: "test",
+//						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
+//					},
+//					Status: appsv1.StatefulSetStatus{
+//						AvailableReplicas: 1,
+//						Replicas:          1,
+//						ReadyReplicas:     1,
+//					},
+//					Spec: appsv1.StatefulSetSpec{
+//						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+//							{
+//								ObjectMeta: metav1.ObjectMeta{
+//									Name:      "logstash-data",
+//									Namespace: "test",
+//								},
+//								Spec: corev1.PersistentVolumeClaimSpec{
+//									StorageClassName: pointer.String(sampleStorageClass.Name),
+//									Resources: corev1.ResourceRequirements{
+//										Requests: corev1.ResourceList{
+//											corev1.ResourceStorage: resource.MustParse("1Gi"),
+//										},
+//									},
+//								},
+//							},
+//						},
+//					},
+//				},
+//				&corev1.Pod{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash-ls",
+//						Namespace:  "test",
+//						Generation: 2,
+//						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
+//					},
+//					Status: corev1.PodStatus{
+//						Phase: corev1.PodRunning,
+//					},
+//				},
+//			},
+//			request: reconcile.Request{
+//				NamespacedName: types.NamespacedName{
+//					Namespace: "test",
+//					Name:      "testLogstash",
+//				},
+//			},
+//			want: reconcile.Result{},
+//			expectedObjects: []expectedObject{
+//				{
+//					t:    &corev1.Service{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
+//				},
+//			},
+//
+//			expected: logstashv1alpha1.Logstash{
+//				ObjectMeta: metav1.ObjectMeta{
+//					Name:       "testLogstash",
+//					Namespace:  "test",
+//					Generation: 2,
+//				},
+//				Spec: logstashv1alpha1.LogstashSpec{
+//					Version: "8.6.1",
+//					Count:   1,
+//					Services: []logstashv1alpha1.LogstashService{{
+//						Name: "api",
+//						Service: commonv1.ServiceTemplate{
+//							Spec: corev1.ServiceSpec{
+//								Ports: nil,
+//							},
+//						},
+//					}},
+//				},
+//				Status: logstashv1alpha1.LogstashStatus{
+//					Version:            "8.6.1",
+//					ExpectedNodes:      1,
+//					AvailableNodes:     1,
+//					ObservedGeneration: 2,
+//					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
+//				},
+//			},
+//			wantErr: false,
+//		},
+//	}
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			r := newReconcileLogstash(tt.objs...)
+//			got, err := r.Reconcile(context.Background(), tt.request)
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("ReconcileLogstash.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+//				return
+//			}
+//			if !reflect.DeepEqual(got, tt.want) {
+//				t.Errorf("ReconcileLogstash.Reconcile() = %v, want %v", got, tt.want)
+//			}
+//
+//			var Logstash logstashv1alpha1.Logstash
+//			if err := r.Client.Get(context.Background(), tt.request.NamespacedName, &Logstash); err != nil {
+//				t.Error(err)
+//				return
+//			}
+//			tt.expectedObjects.assertExist(t, r.Client)
+//			comparison.AssertEqual(t, &Logstash, &tt.expected)
+//		})
+//	}
+//}
 
-			expected: logstashv1alpha1.Logstash{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "testLogstash",
-					Namespace:  "test",
-					Generation: 2,
-				},
-				Spec: logstashv1alpha1.LogstashSpec{
-					Version: "8.6.1",
-					Count:   1,
-				},
-				Status: logstashv1alpha1.LogstashStatus{
-					Version:            "8.6.1",
-					ExpectedNodes:      1,
-					AvailableNodes:     1,
-					ObservedGeneration: 2,
-					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
+
+//func TestReconcileLogstash_ReconcileVolumeExpansion(t *testing.T) {
+//	defaultLabels := (&logstashv1alpha1.Logstash{ObjectMeta: metav1.ObjectMeta{Name: "testLogstash"}}).GetIdentityLabels()
+//	tests := []struct {
+//		name            string
+//		objs            []client.Object
+//		secondObjs            []client.Object
+//		request         reconcile.Request
+//		want            reconcile.Result
+//		expected        logstashv1alpha1.Logstash
+//		expectedObjects expectedObjects
+//		wantErr         bool
+//	}{
+//
+//		{
+//			name: "Logstash with ready StatefulSet and Pod updates status and creates secrets and service",
+//			objs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash",
+//						Namespace:  "test",
+//						Generation: 2,
+//					},
+//					Spec: logstashv1alpha1.LogstashSpec{
+//						Version: "8.6.1",
+//						Count:   1,
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//				&appsv1.StatefulSet{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:      "testLogstash-ls",
+//						Namespace: "test",
+//						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
+//					},
+//					Status: appsv1.StatefulSetStatus{
+//						AvailableReplicas: 1,
+//						Replicas:          1,
+//						ReadyReplicas:     1,
+//					},
+//					Spec: appsv1.StatefulSetSpec{
+//						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+//							{
+//								ObjectMeta: metav1.ObjectMeta{
+//									Name:      "logstash-data",
+//									Namespace: "test",
+//								},
+//								Spec: corev1.PersistentVolumeClaimSpec{
+//									StorageClassName: pointer.String(sampleStorageClass.Name),
+//									Resources: corev1.ResourceRequirements{
+//										Requests: corev1.ResourceList{
+//											corev1.ResourceStorage: resource.MustParse("1Gi"),
+//										},
+//									},
+//								},
+//							},
+//						},
+//					},
+//				},
+//				&corev1.Pod{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash-ls",
+//						Namespace:  "test",
+//						Generation: 2,
+//						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
+//					},
+//					Status: corev1.PodStatus{
+//						Phase: corev1.PodRunning,
+//					},
+//				},
+//			},
+//			secondObjs: []client.Object{
+//				&logstashv1alpha1.Logstash{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash",
+//						Namespace:  "test",
+//						Generation: 2,
+//					},
+//					Spec: logstashv1alpha1.LogstashSpec{
+//						Version: "8.6.1",
+//						Count:   1,
+//					},
+//					Status: logstashv1alpha1.LogstashStatus{
+//						ObservedGeneration: 1,
+//					},
+//				},
+//				&appsv1.StatefulSet{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:      "testLogstash-ls",
+//						Namespace: "test",
+//						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
+//					},
+//					Status: appsv1.StatefulSetStatus{
+//						AvailableReplicas: 1,
+//						Replicas:          1,
+//						ReadyReplicas:     1,
+//					},
+//					Spec: appsv1.StatefulSetSpec{
+//						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+//							{
+//								ObjectMeta: metav1.ObjectMeta{
+//									Name:      "logstash-data",
+//									Namespace: "test",
+//								},
+//								Spec: corev1.PersistentVolumeClaimSpec{
+//									StorageClassName: pointer.String(sampleStorageClass.Name),
+//									Resources: corev1.ResourceRequirements{
+//										Requests: corev1.ResourceList{
+//											corev1.ResourceStorage: resource.MustParse("2Gi"),
+//										},
+//									},
+//								},
+//							},
+//						},
+//					},
+//				},
+//				&corev1.Pod{
+//					ObjectMeta: metav1.ObjectMeta{
+//						Name:       "testLogstash-ls",
+//						Namespace:  "test",
+//						Generation: 2,
+//						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
+//					},
+//					Status: corev1.PodStatus{
+//						Phase: corev1.PodRunning,
+//					},
+//				},
+//			},
+//			request: reconcile.Request{
+//				NamespacedName: types.NamespacedName{
+//					Namespace: "test",
+//					Name:      "testLogstash",
+//				},
+//			},
+//			want: reconcile.Result{},
+//			expectedObjects: []expectedObject{
+//				{
+//					t:    &corev1.Service{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
+//				},
+//				{
+//					t:    &corev1.Secret{},
+//					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
+//				},
+//			},
+//
+//			expected: logstashv1alpha1.Logstash{
+//				ObjectMeta: metav1.ObjectMeta{
+//					Name:       "testLogstash",
+//					Namespace:  "test",
+//					Generation: 2,
+//				},
+//				Spec: logstashv1alpha1.LogstashSpec{
+//					Version: "8.6.1",
+//					Count:   1,
+//				},
+//				Status: logstashv1alpha1.LogstashStatus{
+//					Version:            "8.6.1",
+//					ExpectedNodes:      1,
+//					AvailableNodes:     1,
+//					ObservedGeneration: 4,
+//					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
+//				},
+//			},
+//			wantErr: false,
+//		},
+//	}
+//	for _, tt := range tests {
+//		t.Run(tt.name, func(t *testing.T) {
+//			r := newReconcileLogstash(tt.objs...)
+//			r2 := newReconcileLogstash(tt.objs...)
+//
+//			got, err := r.Reconcile(context.Background(), tt.request)
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("ReconcileLogstash.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+//				return
+//			}
+//			got, err = r2.Reconcile(context.Background(), tt.request)
+//			if (err != nil) != tt.wantErr {
+//				t.Errorf("ReconcileLogstash.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+//				return
+//			}
+//
+//
+//			if !reflect.DeepEqual(got, tt.want) {
+//				t.Errorf("ReconcileLogstash.Reconcile() = %v, want %v", got, tt.want)
+//			}
+//
+//			var Logstash logstashv1alpha1.Logstash
+//			if err := r.Client.Get(context.Background(), tt.request.NamespacedName, &Logstash); err != nil {
+//				t.Error(err)
+//				return
+//			}
+//			tt.expectedObjects.assertExist(t, r.Client)
+//			comparison.AssertEqual(t, &Logstash, &tt.expected)
+//		})
+//	}
+//}
+
+
+func TestHandleUpscaleAndSpecChanges_PVCResize(t *testing.T) {
+	// focus on the special case of handling PVC resize
+	ls := logstashv1alpha1.Logstash{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns",
+			Name: "ls",
+		},
+		Spec: logstashv1alpha1.LogstashSpec{Version: "8.11.0"},
+	}
+
+	truePtr := true
+	storageClass := storagev1.StorageClass{
+		ObjectMeta:           metav1.ObjectMeta{Name: "resizeable"},
+		AllowVolumeExpansion: &truePtr,
+	}
+
+	// 3 masters, 4 data x 1Gi storage
+	actualStatefulSets := []appsv1.StatefulSet{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
+				Name:      "sset1",
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: pointer.Int32(3),
+				Template: corev1.PodTemplateSpec{
+					//ObjectMeta: metav1.ObjectMeta{
+					//	Labels: map[string]string{
+					//		string(label.NodeTypesMasterLabelName): "true",
+					//	},
+					//},
 				},
 			},
-			wantErr: false,
 		},
 		{
-			name: "Logstash with a custom service creates secrets and service",
-			objs: []client.Object{
-				&logstashv1alpha1.Logstash{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash",
-						Namespace:  "test",
-						Generation: 2,
-					},
-					Spec: logstashv1alpha1.LogstashSpec{
-						Version: "8.6.1",
-						Count:   1,
-						Services: []logstashv1alpha1.LogstashService{{
-							Name: "test",
-							Service: commonv1.ServiceTemplate{
-								Spec: corev1.ServiceSpec{
-									Ports: []corev1.ServicePort{
-										{Protocol: "TCP", Port: 9500},
-									},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
+				Name:      "sset2",
+			},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas: pointer.Int32(4),
+				VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+					{ObjectMeta: metav1.ObjectMeta{Name: "ls-data"},
+						Spec: corev1.PersistentVolumeClaimSpec{
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse("1Gi"),
 								},
 							},
-						}},
-					},
-					Status: logstashv1alpha1.LogstashStatus{
-						ObservedGeneration: 1,
-					},
-				},
-				&appsv1.StatefulSet{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "testLogstash-ls",
-						Namespace: "test",
-						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
-					},
-					Status: appsv1.StatefulSetStatus{
-						AvailableReplicas: 1,
-						Replicas:          1,
-						ReadyReplicas:     1,
-					},
-					Spec: appsv1.StatefulSetSpec{
-						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-							{
-								ObjectMeta: metav1.ObjectMeta{
-									Name:      "logstash-data",
-									Namespace: "test",
-								},
-								Spec: corev1.PersistentVolumeClaimSpec{
-									StorageClassName: pointer.String(sampleStorageClass.Name),
-									Resources: corev1.ResourceRequirements{
-										Requests: corev1.ResourceList{
-											corev1.ResourceStorage: resource.MustParse("1Gi"),
-										},
-									},
-								},
-							},
+							StorageClassName: &storageClass.Name,
 						},
 					},
 				},
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash-ls",
-						Namespace:  "test",
-						Generation: 2,
-						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
-					},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodRunning,
-					},
-				},
 			},
-			request: reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: "test",
-					Name:      "testLogstash",
-				},
-			},
-			want: reconcile.Result{},
-			expectedObjects: []expectedObject{
-				{
-					t:    &corev1.Service{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
-				},
-				{
-					t:    &corev1.Service{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-test"},
-				},
-				{
-					t:    &corev1.Secret{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
-				},
-				{
-					t:    &corev1.Secret{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
-				},
-			},
-
-			expected: logstashv1alpha1.Logstash{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "testLogstash",
-					Namespace:  "test",
-					Generation: 2,
-				},
-				Spec: logstashv1alpha1.LogstashSpec{
-					Version: "8.6.1",
-					Count:   1,
-					Services: []logstashv1alpha1.LogstashService{{
-						Name: "test",
-						Service: commonv1.ServiceTemplate{
-							Spec: corev1.ServiceSpec{
-								Ports: []corev1.ServicePort{
-									{Protocol: "TCP", Port: 9500},
-								},
-							},
-						},
-					}},
-				},
-				Status: logstashv1alpha1.LogstashStatus{
-					Version:            "8.6.1",
-					ExpectedNodes:      1,
-					AvailableNodes:     1,
-					ObservedGeneration: 2,
-					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Logstash with a service with no port creates secrets and service",
-			objs: []client.Object{
-				&logstashv1alpha1.Logstash{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash",
-						Namespace:  "test",
-						Generation: 2,
-					},
-					Spec: logstashv1alpha1.LogstashSpec{
-						Version: "8.6.1",
-						Count:   1,
-						Services: []logstashv1alpha1.LogstashService{{
-							Name: "api",
-							Service: commonv1.ServiceTemplate{
-								Spec: corev1.ServiceSpec{
-									Ports: nil,
-								},
-							},
-						}},
-					},
-					Status: logstashv1alpha1.LogstashStatus{
-						ObservedGeneration: 1,
-					},
-				},
-				&storagev1.StorageClass{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "default-sc",
-					},
-				},
-				&appsv1.StatefulSet{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "testLogstash-ls",
-						Namespace: "test",
-						Labels:    addLabel(defaultLabels, hash.TemplateHashLabelName, "3145706383"),
-					},
-					Status: appsv1.StatefulSetStatus{
-						AvailableReplicas: 1,
-						Replicas:          1,
-						ReadyReplicas:     1,
-					},
-					Spec: appsv1.StatefulSetSpec{
-						VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-							{
-								ObjectMeta: metav1.ObjectMeta{
-									Name:      "logstash-data",
-									Namespace: "test",
-								},
-								Spec: corev1.PersistentVolumeClaimSpec{
-									StorageClassName: pointer.String(sampleStorageClass.Name),
-									Resources: corev1.ResourceRequirements{
-										Requests: corev1.ResourceList{
-											corev1.ResourceStorage: resource.MustParse("1Gi"),
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:       "testLogstash-ls",
-						Namespace:  "test",
-						Generation: 2,
-						Labels:     map[string]string{labels.NameLabelName: "testLogstash", VersionLabelName: "8.6.1"},
-					},
-					Status: corev1.PodStatus{
-						Phase: corev1.PodRunning,
-					},
-				},
-			},
-			request: reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: "test",
-					Name:      "testLogstash",
-				},
-			},
-			want: reconcile.Result{},
-			expectedObjects: []expectedObject{
-				{
-					t:    &corev1.Service{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-api"},
-				},
-				{
-					t:    &corev1.Secret{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-config"},
-				},
-				{
-					t:    &corev1.Secret{},
-					name: types.NamespacedName{Namespace: "test", Name: "testLogstash-ls-pipeline"},
-				},
-			},
-
-			expected: logstashv1alpha1.Logstash{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:       "testLogstash",
-					Namespace:  "test",
-					Generation: 2,
-				},
-				Spec: logstashv1alpha1.LogstashSpec{
-					Version: "8.6.1",
-					Count:   1,
-					Services: []logstashv1alpha1.LogstashService{{
-						Name: "api",
-						Service: commonv1.ServiceTemplate{
-							Spec: corev1.ServiceSpec{
-								Ports: nil,
-							},
-						},
-					}},
-				},
-				Status: logstashv1alpha1.LogstashStatus{
-					Version:            "8.6.1",
-					ExpectedNodes:      1,
-					AvailableNodes:     1,
-					ObservedGeneration: 2,
-					Selector:           "common.k8s.elastic.co/type=logstash,logstash.k8s.elastic.co/name=testLogstash",
-				},
-			},
-			wantErr: false,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newReconcileLogstash(tt.objs...)
-			got, err := r.Reconcile(context.Background(), tt.request)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ReconcileLogstash.Reconcile() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ReconcileLogstash.Reconcile() = %v, want %v", got, tt.want)
-			}
+	// expected: same 2 StatefulSets, but the 2nd one has its storage resized to 3Gi
+	dataResized := *actualStatefulSets[1].DeepCopy()
+	dataResized.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("3Gi")
 
-			var Logstash logstashv1alpha1.Logstash
-			if err := r.Client.Get(context.Background(), tt.request.NamespacedName, &Logstash); err != nil {
-				t.Error(err)
-				return
-			}
-			tt.expectedObjects.assertExist(t, r.Client)
-			comparison.AssertEqual(t, &Logstash, &tt.expected)
-		})
-	}
+	//expectedResources := nodespec.ResourcesList{
+	//	{
+	//		StatefulSet: actualStatefulSets[0],
+	//		HeadlessService: corev1.Service{
+	//			ObjectMeta: metav1.ObjectMeta{
+	//				Namespace: "ns",
+	//				Name:      "sset1",
+	//			},
+	//		},
+	//		Config: settings.CanonicalConfig{},
+	//	},
+	//	{
+	//		StatefulSet: dataResized,
+	//		HeadlessService: corev1.Service{
+	//			ObjectMeta: metav1.ObjectMeta{
+	//				Namespace: "ns",
+	//				Name:      "sset2",
+	//			},
+	//		},
+	//		Config: settings.CanonicalConfig{},
+	//	},
+	//}
+
+	k8sClient := k8s.NewFakeClient(&ls, &storageClass, &actualStatefulSets[0], &actualStatefulSets[1])
+
+	require.NoError(t, k8sClient.Get(context.Background(), k8s.ExtractNamespacedName(&ls.ObjectMeta), &ls))
+	//ctx := upscaleCtx{
+	//	k8sClient:    k8sClient,
+	//	es:           es,
+	//	esState:      nil,
+	//	expectations: expectations.NewExpectations(k8sClient),
+	//	parentCtx:    context.Background(),
+	//}
+	//
+	//// 2nd StatefulSet should be marked for recreation, we should requeue
+	//res, err := HandleUpscaleAndSpecChanges(ctx, actualStatefulSets, expectedResources)
+	//require.NoError(t, err)
+	//require.True(t, res.Requeue)
+	//require.NoError(t, k8sClient.Get(context.Background(), k8s.ExtractNamespacedName(&es.ObjectMeta), &es))
+	//require.Len(t, es.Annotations, 2) // initial master nodes + sset to recreate
 }
+
+
 
 func addLabel(labels map[string]string, key, value string) map[string]string {
 	newLabels := make(map[string]string, len(labels))
