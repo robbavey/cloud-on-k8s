@@ -47,15 +47,14 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		VolumeClaimTemplates: params.Logstash.Spec.VolumeClaimTemplates,
 	})
 
-	return funcName(params, expected)
-}
-
-func funcName(params Params, expected appsv1.StatefulSet) (*reconciler.Results, logstashv1alpha1.LogstashStatus)  {
+//	return funcName(params, expected)
+//}
+//
+//func funcName(params Params, expected appsv1.StatefulSet) (*reconciler.Results, logstashv1alpha1.LogstashStatus)  {
 	results := reconciler.NewResult(params.Context)
 	recreations := 0
 
 	sSetRecreations, err := recreateStatefulSets(params.Context, params.Client, params.Logstash)
-	ulog.FromContext(params.Context).V(1).Info("RSS!", "sseetrecreations", sSetRecreations)
 
 	recreations += sSetRecreations
 	if err != nil {
