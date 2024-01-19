@@ -65,7 +65,6 @@ func handleVolumeExpansion(
 
 	// schedule the StatefulSet for recreation if needed
 	recreatesets, err := ssetsToRecreate(ls)
-	ulog.FromContext(ctx).V(1).Info("recreatesets", "recreate", recreatesets)
 	if err != nil {
 		return false, err
 	}
@@ -138,7 +137,7 @@ func annotateForRecreation(
 	actualSset appsv1.StatefulSet,
 	expectedClaims []corev1.PersistentVolumeClaim,
 ) error {
-	ulog.FromContext(ctx).Info("annotate for recreation: Preparing StatefulSet re-creation to account for PVC resize",
+	ulog.FromContext(ctx).Info("Preparing StatefulSet re-creation to account for PVC resize",
 		"namespace", ls.Namespace, "ls_name", ls.Name, "statefulset_name", actualSset.Name)
 
 	actualSset.Spec.VolumeClaimTemplates = expectedClaims
@@ -150,11 +149,7 @@ func annotateForRecreation(
 		ls.Annotations = make(map[string]string, 1)
 	}
 	ls.Annotations[RecreateStatefulSetAnnotationPrefix+actualSset.Name] = string(asJSON)
-	ulog.FromContext(ctx).Info("adding annotations", "annotations", len(ls.Annotations))
-
-	err = k8sClient.Update(ctx, &ls)
-	ulog.FromContext(ctx).Info("added annotations", "annotations", len(ls.Annotations))
-	return err
+	return k8sClient.Update(ctx, &ls)
 }
 
 // needsRecreate returns true if the StatefulSet needs to be re-created to account for volume expansion.
@@ -184,18 +179,15 @@ func needsRecreate(expectedSset appsv1.StatefulSet, actualSset appsv1.StatefulSe
 func recreateStatefulSets(ctx context.Context, k8sClient k8s.Client, ls lsv1alpha1.Logstash) (int, error) {
 	log := ulog.FromContext(ctx)
 	recreateList, err := ssetsToRecreate(ls)
-	//log.V(1).Info("Recreating Stateful Sets", "recreations", recreateList)
 	if err != nil {
 		return 0, err
 	}
 	recreations := len(recreateList)
-	log.V(1).Info("Recreating Stateful Sets", "recreations count", recreations)
 
 	for annotation, toRecreate := range recreateList {
 		toRecreate := toRecreate
 		var existing appsv1.StatefulSet
 		err := k8sClient.Get(ctx, k8s.ExtractNamespacedName(&toRecreate), &existing)
-		log.V(1).Info("Recreating Stateful Sets - existnt", "namespace name", k8s.ExtractNamespacedName(&toRecreate), "err", err)
 		switch {
 		// error case
 		case err != nil && !apierrors.IsNotFound(err):
@@ -224,7 +216,8 @@ func recreateStatefulSets(ctx context.Context, k8sClient k8s.Client, ls lsv1alph
 
 		// already recreated (existing.UID != toRecreate.UID): we're done
 		default:
-			log.Info("Tidying up")
+			log.V(1).Info("Removing temporary Pod Owner and removing StatefulSet recreation annotations","namespace",
+						  ls.Namespace, "ls_name", ls.Name)
 			// remove the temporary pod owner set before the StatefulSet was deleted
 			if err := removeLSPodOwner(ctx, k8sClient, ls, existing); err != nil {
 				return recreations, err
@@ -265,8 +258,6 @@ func deleteStatefulSet(ctx context.Context, k8sClient k8s.Client, sset appsv1.St
 	// ensure Pods are not also deleted
 	orphanPolicy := metav1.DeletePropagationOrphan
 	opts.PropagationPolicy = &orphanPolicy
-	log := ulog.FromContext(ctx)
-	log.V(1).Info("Deleting old stateful set", "ss_name", sset.Name, "uid", sset.UID)
 	return k8sClient.Delete(ctx, &sset, &opts)
 }
 
@@ -281,10 +272,7 @@ func recreateStatefulSet(ctx context.Context, k8sClient k8s.Client, sset appsv1.
 		Finalizers:      sset.Finalizers,
 	}
 	sset.ObjectMeta = newObjMeta
-	log := ulog.FromContext(ctx)
-	log.Info("Recreating stateful set", "ss_name", sset.Name)
 	err := k8sClient.Create(ctx, &sset)
-	log.V(1).Info("created new stateful set", "ss_name", sset.Name, "uid", sset.UID)
 	return err
 }
 

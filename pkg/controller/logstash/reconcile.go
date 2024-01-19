@@ -47,10 +47,6 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		VolumeClaimTemplates: params.Logstash.Spec.VolumeClaimTemplates,
 	})
 
-//	return funcName(params, expected)
-//}
-//
-//func funcName(params Params, expected appsv1.StatefulSet) (*reconciler.Results, logstashv1alpha1.LogstashStatus)  {
 	results := reconciler.NewResult(params.Context)
 	recreations := 0
 
@@ -74,9 +70,6 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 			"recreations", recreations, "status", params.Status)
 		return results.WithResult(reconcile.Result{RequeueAfter: 30 * time.Second}), params.Status
 	}
-
-
-	ulog.FromContext(params.Context).V(1).Info("checking expectations")
 	ok, _, err := params.expectationsSatisfied(params.Context)
 	if err != nil {
 		return results.WithError(err), params.Status
@@ -86,19 +79,12 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		return results.WithResult(reconcile.Result{Requeue: true}), params.Status
 	}
 
-	ulog.FromContext(params.Context).V(1).Info("checked expectations")
-
 	if err := controllerutil.SetControllerReference(&params.Logstash, &expected, scheme.Scheme); err != nil {
-		ulog.FromContext(params.Context).V(1).Info("cannot control")
 		return results.WithError(err), params.Status
 	}
-	ulog.FromContext(params.Context).V(1).Info("checked expectationsxxxx")
 
-	ulog.FromContext(params.Context).V(1).Info("namespacedName", "message", k8s.ExtractNamespacedName(&params.Logstash))
 	actualStatefulSets, err := sset.RetrieveActualStatefulSets(params.Client, k8s.ExtractNamespacedName(&params.Logstash))
-	l := labels.NewLabelSelectorForLogstashName(params.Logstash.Name)
-	ulog.FromContext(params.Context).V(1).Info("labels", "message", l)
-	//ulog.FromContext(params.Context).V(1).Info("ACTUAL", "message", actualStatefulSets)
+
 	if err != nil {
 		return results.WithError(err), params.Status
 	}
@@ -108,42 +94,16 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		//nolint:nestif
 		if _, exists := actualStatefulSets.GetByName(actualStatefulSet.Name); exists {
 			recreateSset, err := handleVolumeExpansion(params.Context, params.Client, params.Logstash, expected, actualStatefulSet, true)
-			ulog.FromContext(params.Context).V(1).Info("after hve, requeueing", "recreateSet", recreateSset, "anotations", len(params.Logstash.Annotations))
 			if err != nil {
-				ulog.FromContext(params.Context).V(1).Info("after hve, err", "err", err)
 				return results.WithError(err), params.Status
 			}
 			if recreateSset {
-				ulog.FromContext(params.Context).V(1).Info("RECREATE SSET _ REQUEUE")
 				return results.WithResult(reconcile.Result{Requeue: true}), params.Status
-				//sSetRecreations, err := recreateStatefulSets(params.Context, params.Client, params.Logstash)
-				//ulog.FromContext(params.Context).V(1).Info("after hve, requeueing", "sseetrecreations", sSetRecreations)
-				//
-				//recreations += sSetRecreations
-				//if err != nil {
-				//	if apierrors.IsConflict(err) {
-				//		ulog.FromContext(params.Context).V(1).Info("Conflict while recreating stateful set, requeueing", "message", err)
-				//		return results.WithResult(reconcile.Result{Requeue: true}), params.Status
-				//	}
-				//	return results.WithError(fmt.Errorf("StatefulSet recreation: %w", err)), params.Status
-				//}
 			}
 		}
 	}
 
-	//if recreations > 0 {
-	//	// Some StatefulSets are in the process of being recreated to handle PVC expansion:
-	//	// it is safer to requeue until the re-creation is done.
-	//	// Otherwise, some operation could be performed with wrong assumptions:
-	//	// the sset doesn't exist (was just deleted), but the Pods do actually exist.
-	//	ulog.FromContext(params.Context).V(1).Info("StatefulSets recreation in progress, re-queueing after 30 seconds.", "namespace", params.Logstash.Namespace, "ls_name", params.Logstash.Name,
-	//		"recreations", recreations, "status", params.Status)
-	//	return results.WithResult(reconcile.Result{RequeueAfter: 30 * time.Second}), params.Status
-	//}
-	ulog.FromContext(params.Context).V(1).Info("RECREATE SSET _ RECONCILE")
-	//ulog.FromContext(params.Context).V(1).Info("before reconciling ss", "ls", params.Logstash)
 	reconciled, err := sset.Reconcile(params.Context, params.Client, expected, &params.Logstash, params.Expectations)
-	//ulog.FromContext(params.Context).V(1).Info("after reconciling ss", "ls", params.Logstash)
 
 	if err != nil {
 		return results.WithError(err), params.Status
