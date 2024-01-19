@@ -131,10 +131,11 @@ func (r *ReconcileLogstash) Reconcile(ctx context.Context, request reconcile.Req
 	ctx = common.NewReconciliationContext(ctx, &r.iteration, r.Tracer, controllerName, "logstash_name", request)
 	defer common.LogReconciliationRun(ulog.FromContext(ctx))()
 	defer tracing.EndContextTransaction(ctx)
-
 	logstash := &logstashv1alpha1.Logstash{}
 	if err := r.Client.Get(ctx, request.NamespacedName, logstash); err != nil {
 		if apierrors.IsNotFound(err) {
+			ulog.FromContext(ctx).V(1).Info("Logstash not gound", "name", request.NamespacedName)
+
 			return reconcile.Result{}, r.onDelete(ctx, request.NamespacedName)
 		}
 		return reconcile.Result{}, tracing.CaptureError(ctx, err)
@@ -168,7 +169,7 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 	logger := ulog.FromContext(ctx)
 	results := reconciler.NewResult(ctx)
 	status := newStatus(logstash)
-
+	ulog.FromContext(ctx).V(1).Info("in doRconcile")
 	areAssocsConfigured, err := association.AreConfiguredIfSet(ctx, logstash.GetAssociations(), r.recorder)
 	if err != nil {
 		return results.WithError(err), status
@@ -194,7 +195,7 @@ func (r *ReconcileLogstash) doReconcile(ctx context.Context, logstash logstashv1
 		results = results.WithError(err)
 		return results, status
 	}
-
+	ulog.FromContext(ctx).V(1).Info("calling internalReconcile")
 	return internalReconcile(Params{
 		Context:        ctx,
 		Client:         r.Client,

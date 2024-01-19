@@ -63,8 +63,9 @@ func handleVolumeExpansion(
 		return false, err
 	}
 
-	//// schedule the StatefulSet for recreation if needed
+	// schedule the StatefulSet for recreation if needed
 	recreatesets, err := ssetsToRecreate(ls)
+	ulog.FromContext(ctx).V(1).Info("recreatesets", "recreate", recreatesets)
 	if err != nil {
 		return false, err
 	}
@@ -149,7 +150,11 @@ func annotateForRecreation(
 		ls.Annotations = make(map[string]string, 1)
 	}
 	ls.Annotations[RecreateStatefulSetAnnotationPrefix+actualSset.Name] = string(asJSON)
-	return k8sClient.Update(ctx, &ls)
+	ulog.FromContext(ctx).Info("adding annotations", "annotations", len(ls.Annotations))
+
+	err = k8sClient.Update(ctx, &ls)
+	ulog.FromContext(ctx).Info("added annotations", "annotations", len(ls.Annotations))
+	return err
 }
 
 // needsRecreate returns true if the StatefulSet needs to be re-created to account for volume expansion.
@@ -179,7 +184,7 @@ func needsRecreate(expectedSset appsv1.StatefulSet, actualSset appsv1.StatefulSe
 func recreateStatefulSets(ctx context.Context, k8sClient k8s.Client, ls lsv1alpha1.Logstash) (int, error) {
 	log := ulog.FromContext(ctx)
 	recreateList, err := ssetsToRecreate(ls)
-
+	//log.V(1).Info("Recreating Stateful Sets", "recreations", recreateList)
 	if err != nil {
 		return 0, err
 	}
@@ -190,15 +195,23 @@ func recreateStatefulSets(ctx context.Context, k8sClient k8s.Client, ls lsv1alph
 		toRecreate := toRecreate
 		var existing appsv1.StatefulSet
 		err := k8sClient.Get(ctx, k8s.ExtractNamespacedName(&toRecreate), &existing)
-
+		log.V(1).Info("Recreating Stateful Sets - existnt", "namespace name", k8s.ExtractNamespacedName(&toRecreate), "err", err)
 		switch {
 		// error case
 		case err != nil && !apierrors.IsNotFound(err):
 			log.V(1).Info("StatefulSet not found")
 			return recreations, err
 
+		// already deleted: creation case
+		case err != nil && apierrors.IsNotFound(err):
+			log.Info("Recreating StatefulSet to account for resized PVCs",
+				"namespace", ls.Namespace, "ls_name", ls.Name, "statefulset_name", toRecreate.Name)
+			if err := recreateStatefulSet(ctx, k8sClient, toRecreate); err != nil {
+				return recreations, err
+			}
+
 		// already exists with the same UID: deletion case
-		case existing.UID == toRecreate.UID:
+		case (existing.UID == toRecreate.UID) && err == nil:
 			log.Info("Deleting StatefulSet to account for resized PVCs, it will be recreated automatically",
 				"namespace", ls.Namespace, "ls_name", ls.Name, "statefulset_name", existing.Name)
 			// mark the Pod as owned by the LS resource while the StatefulSet is removed
@@ -209,16 +222,9 @@ func recreateStatefulSets(ctx context.Context, k8sClient k8s.Client, ls lsv1alph
 				return recreations, err
 			}
 
-		// already deleted: creation case
-		case err != nil && apierrors.IsNotFound(err):
-			log.Info("Recreating StatefulSet to account for resized PVCs",
-				"namespace", ls.Namespace, "ls_name", ls.Name, "statefulset_name", toRecreate.Name)
-			if err := recreateStatefulSet(ctx, k8sClient, toRecreate); err != nil {
-				return recreations, err
-			}
-
 		// already recreated (existing.UID != toRecreate.UID): we're done
 		default:
+			log.Info("Tidying up")
 			// remove the temporary pod owner set before the StatefulSet was deleted
 			if err := removeLSPodOwner(ctx, k8sClient, ls, existing); err != nil {
 				return recreations, err
@@ -260,7 +266,7 @@ func deleteStatefulSet(ctx context.Context, k8sClient k8s.Client, sset appsv1.St
 	orphanPolicy := metav1.DeletePropagationOrphan
 	opts.PropagationPolicy = &orphanPolicy
 	log := ulog.FromContext(ctx)
-	log.V(1).Info("Deleting old stateful set", "ss_name", sset.Name)
+	log.V(1).Info("Deleting old stateful set", "ss_name", sset.Name, "uid", sset.UID)
 	return k8sClient.Delete(ctx, &sset, &opts)
 }
 
@@ -277,7 +283,9 @@ func recreateStatefulSet(ctx context.Context, k8sClient k8s.Client, sset appsv1.
 	sset.ObjectMeta = newObjMeta
 	log := ulog.FromContext(ctx)
 	log.Info("Recreating stateful set", "ss_name", sset.Name)
-	return k8sClient.Create(ctx, &sset)
+	err := k8sClient.Create(ctx, &sset)
+	log.V(1).Info("created new stateful set", "ss_name", sset.Name, "uid", sset.UID)
+	return err
 }
 
 // updatePodOwners marks all Pods managed by the given StatefulSet as owned by the Logstash resource.

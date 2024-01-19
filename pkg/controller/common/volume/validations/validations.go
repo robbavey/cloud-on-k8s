@@ -34,11 +34,12 @@ func ValidateClaimsStorageUpdate(
 ) error {
 	for _, updatedClaim := range updated {
 		initialClaim := claimMatchingName(initial, updatedClaim.Name)
+		ulog.FromContext(ctx).V(1).Info("validating", "claim name", updatedClaim.Name, "initial", initial, "nitiallcaim", initialClaim)
 		if initialClaim == nil {
 			// existing claim does not exist in updated
 			return errors.New(PvcImmutableErrMsg)
 		}
-
+		ulog.FromContext(ctx).V(1).Info("validating", "initial resources", initialClaim.Spec.Resources, "updated resources", updatedClaim.Spec.Resources)
 		cmp := k8s.CompareStorageRequests(initialClaim.Spec.Resources, updatedClaim.Spec.Resources)
 		switch {
 		case cmp.Increase:

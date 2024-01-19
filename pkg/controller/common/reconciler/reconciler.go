@@ -87,6 +87,8 @@ func ReconcileResource(params Params) error {
 		}
 	}
 
+	log.Info("Reconciling resource", "kind", kind, "namespace", namespace, "name", name)
+
 	create := func() error {
 		log.Info("Creating resource", "kind", kind, "namespace", namespace, "name", name)
 		if params.PreCreate != nil {

@@ -8,7 +8,11 @@ import (
 	"context"
 	//"reflect"
 	"testing"
+	"time"
+	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
+	//"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
 
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"github.com/stretchr/testify/assert"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -21,7 +25,7 @@ import (
 	"k8s.io/utils/pointer"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	//"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	//commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
@@ -44,6 +48,7 @@ func newReconcileLogstash(objs ...client.Object) *ReconcileLogstash {
 	}
 	return r
 }
+
 
 //func TestReconcileLogstash_Reconcile(t *testing.T) {
 //	defaultLabels := (&logstashv1alpha1.Logstash{ObjectMeta: metav1.ObjectMeta{Name: "testLogstash"}}).GetIdentityLabels()
@@ -714,108 +719,244 @@ func newReconcileLogstash(objs ...client.Object) *ReconcileLogstash {
 //}
 
 
-func TestHandleUpscaleAndSpecChanges_PVCResize(t *testing.T) {
+func Test_PVCResize(t *testing.T) {
 	// focus on the special case of handling PVC resize
-	ls := logstashv1alpha1.Logstash{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "ns",
-			Name: "ls",
-		},
-		Spec: logstashv1alpha1.LogstashSpec{Version: "8.11.0"},
-	}
+	//lsuid := uuid.NewUUID()
 
 	truePtr := true
 	storageClass := storagev1.StorageClass{
 		ObjectMeta:           metav1.ObjectMeta{Name: "resizeable"},
 		AllowVolumeExpansion: &truePtr,
 	}
-
-	// 3 masters, 4 data x 1Gi storage
-	actualStatefulSets := []appsv1.StatefulSet{
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "ns",
-				Name:      "sset1",
-			},
-			Spec: appsv1.StatefulSetSpec{
-				Replicas: pointer.Int32(3),
-				Template: corev1.PodTemplateSpec{
-					//ObjectMeta: metav1.ObjectMeta{
-					//	Labels: map[string]string{
-					//		string(label.NodeTypesMasterLabelName): "true",
-					//	},
-					//},
+	ls := logstashv1alpha1.Logstash{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test",
+			Name:      "testLogstash",
+		},
+		Spec: logstashv1alpha1.LogstashSpec{
+			Version: "8.11.0",
+			Count: 1,
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+				{ObjectMeta: metav1.ObjectMeta{Name: "logstash-data"},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: resource.MustParse("1Gi"),
+							},
+						},
+						StorageClassName: &storageClass.Name,
+					},
 				},
 			},
+
 		},
-		{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: "ns",
-				Name:      "sset2",
+
+	}
+
+	//ls2 := logstashv1alpha1.Logstash{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Namespace: "test",
+	//		Name:      "testLogstash",
+	//	},
+	//	Spec: logstashv1alpha1.LogstashSpec{
+	//		Version: "8.11.0",
+	//		Count: 1,
+	//		VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+	//			{ObjectMeta: metav1.ObjectMeta{Name: "logstash-data-testLogstash-ls-0"},
+	//				Spec: corev1.PersistentVolumeClaimSpec{
+	//					Resources: corev1.ResourceRequirements{
+	//						Requests: corev1.ResourceList{
+	//							corev1.ResourceStorage: resource.MustParse("3Gi"),
+	//						},
+	//					},
+	//					StorageClassName: &storageClass.Name,
+	//				},
+	//			},
+	//		},
+	//
+	//	},
+	//
+	//}
+
+
+	// 1 nodes x 1Gi storage
+	actualStatefulSet := appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test",
+			Name:      "testLogstash-ls",
+			UID: 		uuid.NewUUID(),
+			Labels: map[string]string{
+				"common.k8s.elastic.co/type":   "logstash",
+				"logstash.k8s.elastic.co/name": "testLogstash",
 			},
-			Spec: appsv1.StatefulSetSpec{
-				Replicas: pointer.Int32(4),
-				VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
-					{ObjectMeta: metav1.ObjectMeta{Name: "ls-data"},
-						Spec: corev1.PersistentVolumeClaimSpec{
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceStorage: resource.MustParse("1Gi"),
-								},
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: pointer.Int32(1),
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+				{ObjectMeta: metav1.ObjectMeta{Name: "logstash-data"},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: resource.MustParse("1Gi"),
 							},
-							StorageClassName: &storageClass.Name,
 						},
+						StorageClassName: &storageClass.Name,
 					},
 				},
 			},
 		},
 	}
-	// expected: same 2 StatefulSets, but the 2nd one has its storage resized to 3Gi
-	dataResized := *actualStatefulSets[1].DeepCopy()
-	dataResized.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("3Gi")
+	pod := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "testLogstash-ls-0",
+			Namespace:  "test",
+			Generation: 1,
+			Labels: map[string]string{
+				"common.k8s.elastic.co/type":"logstash",
+				"logstash.k8s.elastic.co/name":"testLogstash",
+				"logstash.k8s.elastic.co/statefulset-name":"testLogstash-ls",
+				"logstash.k8s.elastic.co/version":"8.11.0",
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
 
-	//expectedResources := nodespec.ResourcesList{
-	//	{
-	//		StatefulSet: actualStatefulSets[0],
-	//		HeadlessService: corev1.Service{
-	//			ObjectMeta: metav1.ObjectMeta{
-	//				Namespace: "ns",
-	//				Name:      "sset1",
-	//			},
-	//		},
-	//		Config: settings.CanonicalConfig{},
-	//	},
-	//	{
-	//		StatefulSet: dataResized,
-	//		HeadlessService: corev1.Service{
-	//			ObjectMeta: metav1.ObjectMeta{
-	//				Namespace: "ns",
-	//				Name:      "sset2",
-	//			},
-	//		},
-	//		Config: settings.CanonicalConfig{},
-	//	},
-	//}
+	ctx := context.Background()
+	r := newReconcileLogstash(&ls, &pod, &storageClass,  &actualStatefulSet)
+	request := reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Namespace: "test",
+							Name:      "testLogstash",
+						},
+					}
 
-	k8sClient := k8s.NewFakeClient(&ls, &storageClass, &actualStatefulSets[0], &actualStatefulSets[1])
+	result, err := r.Reconcile(ctx, request)
+	require.NoError(t, err)
+	updatedLs := logstashv1alpha1.Logstash{}
+	r.Client.Get(ctx, k8s.ExtractNamespacedName(&ls.ObjectMeta), &updatedLs)
+	ulog.FromContext(ctx).V(1).Info("ls aftger reconcile", "ls", ls)
+	//ulog.FromContext(ctx).V(1).Info("ls aftger reconcile", "us", updatedLs)
 
-	require.NoError(t, k8sClient.Get(context.Background(), k8s.ExtractNamespacedName(&ls.ObjectMeta), &ls))
-	//ctx := upscaleCtx{
-	//	k8sClient:    k8sClient,
-	//	es:           es,
-	//	esState:      nil,
-	//	expectations: expectations.NewExpectations(k8sClient),
-	//	parentCtx:    context.Background(),
-	//}
-	//
-	//// 2nd StatefulSet should be marked for recreation, we should requeue
-	//res, err := HandleUpscaleAndSpecChanges(ctx, actualStatefulSets, expectedResources)
+
+	//params := newParams(r, updatedLs)
+	//ulog.FromContext(ctx).V(1).Info("ls aftger params", "params", params)
+	//results, _ := funcName(params, dataResized)
+
+	logstashResized := *updatedLs.DeepCopy()
+	logstashResized.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage] = resource.MustParse("3Gi")
+
+	r.Client.Update(ctx, &logstashResized)
+
+
+	//results, err := internalReconcile(params)
+	result, err = r.Reconcile(ctx, request)
+
+	//ulog.FromContext(ctx).V(1).Info("ls aftger func name", "ls", ls)
+	require.Equal(t, reconcile.Result{Requeue: true}, result)
+	//require.Equal(t, reconciler.NewResult(ctx).WithResult(reconcile.Result{Requeue: true}), results)
+	updatedls := logstashv1alpha1.Logstash{}
+	r.Client.Get(ctx, request.NamespacedName, &updatedls)
+	require.Equal(t, 1, len(updatedls.Annotations))
+	ulog.FromContext(ctx).V(1).Info("* First Pass - marked with requeue, and Annotations correctly set")
+
+	//params = newParams(r, updatedls)
+	//ulog.FromContext(ctx).V(1).Info("ls aftger params", "ls", ls)
+
+
+	result, err = r.Reconcile(ctx, request)
+	require.Equal(t, reconcile.Result{RequeueAfter: 30 * time.Second}, result)
+	require.NoError(t, err)
+
+	ulog.FromContext(ctx).V(1).Info("______ First reconcile stateful set should be deleted --------")
+	//results, _ = funcName(params, dataResized)
+	ss := appsv1.StatefulSet{}
+	require.Error(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&actualStatefulSet.ObjectMeta), &ss))
+
+	//updatedls = logstashv1alpha1.Logstash{}
+	//ulog.FromContext(ctx).V(1).Info("Updated LS1", "ls", updatedls)
+	//r.Client.Get(ctx, k8s.ExtractNamespacedName(&ls.ObjectMeta), &updatedls)
+	//r.Client.Get(ctx, request.NamespacedName, &ls)
+	//ulog.FromContext(ctx).V(1).Info("original", "requestName", request.NamespacedName, "extracted", k8s.ExtractNamespacedName(&ls.ObjectMeta), "ls", ls)
+
+
+	//r = newReconcileLogstash(&updatedls, &pod, &storageClass,  &actualStatefulSet)
+	//result, err = r.Reconcile(ctx, request)
+	//require.Equal(t, reconcile.Result{RequeueAfter: 30 * time.Second}, result)
 	//require.NoError(t, err)
-	//require.True(t, res.Requeue)
-	//require.NoError(t, k8sClient.Get(context.Background(), k8s.ExtractNamespacedName(&es.ObjectMeta), &es))
-	//require.Len(t, es.Annotations, 2) // initial master nodes + sset to recreate
-}
 
+	//params = newParams(r, updatedls)
+	//results, _ = funcName(params, dataResized)
+	//require.Equal(t, reconciler.NewResult(ctx).WithResult(reconcile.Result{RequeueAfter: 30 * time.Second}), results)
+	//ss = appsv1.StatefulSet{}
+	//require.NoError(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&actualStatefulSet.ObjectMeta), &ss))
+	//updatedls = logstashv1alpha1.Logstash{}
+	//r.Client.Get(ctx, k8s.ExtractNamespacedName(&ls.ObjectMeta), &updatedls)
+	//ulog.FromContext(ctx).V(1).Info("Updated LS2", "ls", updatedls)
+
+	//result, err = r.Reconcile(ctx, request)
+	//require.Equal(t, reconcile.Result{Requeue: false}, result)
+	//require.NoError(t, err)
+
+	result, err = r.Reconcile(ctx, request)
+	require.NoError(t, err)
+
+	ulog.FromContext(ctx).V(1).Info("______ Second reconcile stateful set should be recreated --------")
+
+	ss = appsv1.StatefulSet{}
+	require.NoError(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&actualStatefulSet.ObjectMeta), &ss))
+	require.NoError(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&actualStatefulSet.ObjectMeta), &ss))
+	require.Equal(t, resource.MustParse("3Gi"), ss.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage])
+
+	require.Equal(t, reconcile.Result{RequeueAfter: 30 * time.Second}, result)
+
+	result, err = r.Reconcile(ctx, request)
+	require.NoError(t, err)
+
+	ulog.FromContext(ctx).V(1).Info("______ Third reconcile should be all set --------")
+	updatedls = logstashv1alpha1.Logstash{}
+	r.Client.Get(ctx, request.NamespacedName, &updatedls)
+	require.Equal(t, 0, len(updatedls.Annotations))
+
+	require.Equal(t, reconcile.Result{Requeue: false}, result)
+
+
+	//r = newReconcileLogstash(&ls, &pod, &storageClass,  &dataResized)
+	//result, err = r.Reconcile(ctx, request)
+	//require.Equal(t, reconcile.Result{Requeue: false}, result)
+	//require.NoError(t, err)
+
+	//params = newParams(r, updatedls)
+	//results, _ = funcName(params, ss)
+	//require.Equal(t, reconciler.NewResult(ctx).WithResult(reconcile.Result{Requeue: false}), results)
+
+	//
+	//require.Equal(t, reconciler.NewResult(ctx).WithResult(reconcile.Result{Requeue: true}), results)
+	//ss = appsv1.StatefulSet{}
+	//require.NoError(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&actualStatefulSet.ObjectMeta), &ss))
+
+	//updatedls = logstashv1alpha1.Logstash{}
+	//r.Client.Get(ctx, k8s.ExtractNamespacedName(&ls.ObjectMeta), &updatedls)
+	//require.Equal(t, "", updatedls.Annotations)
+
+
+	//results, _ = funcName(params, dataResized)
+	//require.Equal(t, reconciler.NewResult(ctx).WithResult(reconcile.Result{Requeue: false}), results)
+	//
+	//params = newParams(r, ls, &storageClass, &actualStatefulSet)
+	//ulog.FromContext(ctx).V(1).Info("ls aftger params 2", "ls", ls)
+	//results, _ = funcName(params, resizeStatefulSet)
+	//ulog.FromContext(ctx).V(1).Info("ls aftger func name 2", "ls", ls)
+	//require.Equal(t, reconciler.NewResult(ctx).WithResult(reconcile.Result{Requeue: true}), results)
+	//
+	//require.Error(t, err)
+	//require.NoError(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&ls.ObjectMeta), &ls))
+
+	require.Error(t, r.Client.Get(ctx, k8s.ExtractNamespacedName(&actualStatefulSet.ObjectMeta), &ss))
+	require.Equal(t, resource.MustParse("3Gi"), ss.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests[corev1.ResourceStorage])
+
+}
 
 
 func addLabel(labels map[string]string, key, value string) map[string]string {
@@ -840,4 +981,17 @@ func (e expectedObjects) assertExist(t *testing.T, k8s client.Client) {
 		obj := o.t.DeepCopyObject().(client.Object) //nolint:forcetypeassert
 		assert.NoError(t, k8s.Get(context.Background(), o.name, obj), "Expected object not found: %s", o.name)
 	}
+}
+
+func newParams(reconciler *ReconcileLogstash, ls logstashv1alpha1.Logstash) Params {
+	//client := k8s.NewFakeClient(objs...)
+	r := Params{
+		Client:         reconciler.Client,
+		Context: 		context.Background(),
+		Logstash: ls,
+		EventRecorder:       reconciler.recorder,
+		Watches: reconciler.dynamicWatches,
+		Expectations:   reconciler.expectations,
+	}
+	return r
 }
