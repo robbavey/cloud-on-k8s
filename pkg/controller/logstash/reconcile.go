@@ -89,9 +89,9 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		return results.WithError(err), params.Status
 	}
 
-	//recreations := 0
+	// recreations := 0
 	for _, actualStatefulSet := range actualStatefulSets {
-		//nolint:nestif
+		
 		if _, exists := actualStatefulSets.GetByName(actualStatefulSet.Name); exists {
 			recreateSset, err := handleVolumeExpansion(params.Context, params.Client, params.Logstash, expected, actualStatefulSet, true)
 			if err != nil {

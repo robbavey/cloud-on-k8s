@@ -216,8 +216,8 @@ func recreateStatefulSets(ctx context.Context, k8sClient k8s.Client, ls lsv1alph
 
 		// already recreated (existing.UID != toRecreate.UID): we're done
 		default:
-			log.V(1).Info("Removing temporary Pod Owner and removing StatefulSet recreation annotations","namespace",
-						  ls.Namespace, "ls_name", ls.Name)
+			log.V(1).Info("Removing temporary Pod Owner and removing StatefulSet recreation annotations", "namespace",
+				ls.Namespace, "ls_name", ls.Name)
 			// remove the temporary pod owner set before the StatefulSet was deleted
 			if err := removeLSPodOwner(ctx, k8sClient, ls, existing); err != nil {
 				return recreations, err
