@@ -23,7 +23,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/nodespec"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/pdb"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/reconcile"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/sset"
+	sset "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/version/zen1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/version/zen2"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"

@@ -2,7 +2,7 @@
 // or more contributor license agreements. Licensed under the Elastic License 2.0;
 // you may not use this file except in compliance with the Elastic License 2.0.
 
-package sset
+package statefulset
 
 import (
 	"context"
@@ -17,6 +17,20 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 )
+
+// PodName returns the name of the pod with the given ordinal for this StatefulSet.
+func PodName(ssetName string, ordinal int32) string {
+	return fmt.Sprintf("%s-%d", ssetName, ordinal)
+}
+
+// PodNames returns the names of the pods for this StatefulSet, according to the number of replicas.
+func PodNames(sset appsv1.StatefulSet) []string {
+	names := make([]string, 0, GetReplicas(sset))
+	for i := int32(0); i < GetReplicas(sset); i++ {
+		names = append(names, PodName(sset.Name, i))
+	}
+	return names
+}
 
 // GetReplicas returns the replicas configured for this StatefulSet, or 0 if nil.
 func GetReplicas(statefulSet appsv1.StatefulSet) int32 {
