@@ -165,6 +165,7 @@ func TestNewPodTemplateSpec(t *testing.T) {
 				labels["label1"] = "value1"
 				labels["label2"] = "value2"
 				labels[lslabels.NameLabelName] = "overridden-logstash-name"
+				labels["logstash.k8s.elastic.co/statefulset-name"] = "fake-ls"
 				assert.Equal(t, labels, pod.Labels)
 			},
 		},
