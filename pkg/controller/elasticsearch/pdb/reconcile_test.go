@@ -27,7 +27,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/comparison"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/hash"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/sset"
+	sset "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 )
 
 func TestReconcile(t *testing.T) {
