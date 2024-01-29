@@ -14,10 +14,10 @@ import (
 	commonv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/common/v1"
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
+	sset "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/version"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/settings"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/sset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 )
 

@@ -30,7 +30,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/reconcile"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/settings"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/shutdown"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/sset"
+	sset "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 )
 
