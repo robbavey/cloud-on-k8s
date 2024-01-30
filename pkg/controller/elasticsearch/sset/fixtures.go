@@ -2,7 +2,7 @@
 // or more contributor license agreements. Licensed under the Elastic License 2.0;
 // you may not use this file except in compliance with the Elastic License 2.0.
 
-package statefulset
+package sset
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
@@ -12,6 +12,7 @@ import (
 
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/hash"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
 )
 
@@ -29,7 +30,7 @@ type TestSset struct {
 }
 
 func (t TestSset) Pods() []client.Object {
-	podNames := PodNames(t.Build())
+	podNames := statefulset.PodNames(t.Build())
 	pods := make([]client.Object, t.Replicas)
 	for i, podName := range podNames {
 		pods[i] = TestPod{

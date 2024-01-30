@@ -2,7 +2,7 @@
 // or more contributor license agreements. Licensed under the Elastic License 2.0;
 // you may not use this file except in compliance with the Elastic License 2.0.
 
-package statefulset
+package sset
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	sset "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/version"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
@@ -22,7 +23,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/set"
 )
 
-type StatefulSetList []appsv1.StatefulSet //nolint:revive
+type StatefulSetList []appsv1.StatefulSet
 
 // RetrieveActualStatefulSets returns the list of existing StatefulSets labeled for the given es cluster.
 // It is sorted using a natural order sort so that algorithms which are using the resulting list are more predictable and stable.
@@ -75,7 +76,7 @@ func (l StatefulSetList) ToUpdate() StatefulSetList {
 func (l StatefulSetList) PodNames() []string {
 	names := make([]string, 0, len(l))
 	for _, s := range l {
-		names = append(names, PodNames(s)...)
+		names = append(names, sset.PodNames(s)...)
 	}
 	return names
 }
@@ -84,7 +85,7 @@ func (l StatefulSetList) PodNames() []string {
 func (l StatefulSetList) ExpectedNodeCount() int32 {
 	count := int32(0)
 	for _, s := range l {
-		count += GetReplicas(s)
+		count += sset.GetReplicas(s)
 	}
 	return count
 }
@@ -94,7 +95,7 @@ func (l StatefulSetList) ExpectedMasterNodesCount() int32 {
 	count := int32(0)
 	for _, s := range l {
 		if label.IsMasterNodeSet(s) {
-			count += GetReplicas(s)
+			count += sset.GetReplicas(s)
 		}
 	}
 	return count
@@ -105,7 +106,7 @@ func (l StatefulSetList) ExpectedDataNodesCount() int32 {
 	count := int32(0)
 	for _, s := range l {
 		if label.IsDataNodeSet(s) {
-			count += GetReplicas(s)
+			count += sset.GetReplicas(s)
 		}
 	}
 	return count
@@ -116,7 +117,7 @@ func (l StatefulSetList) ExpectedIngestNodesCount() int32 {
 	count := int32(0)
 	for _, s := range l {
 		if label.IsIngestNodeSet(s) {
-			count += GetReplicas(s)
+			count += sset.GetReplicas(s)
 		}
 	}
 	return count
@@ -126,7 +127,7 @@ func (l StatefulSetList) ExpectedIngestNodesCount() int32 {
 func (l StatefulSetList) PVCNames() []string {
 	var pvcNames []string
 	for _, s := range l {
-		podNames := PodNames(s)
+		podNames := sset.PodNames(s)
 		for _, claim := range s.Spec.VolumeClaimTemplates {
 			for _, podName := range podNames {
 				pvcNames = append(pvcNames, fmt.Sprintf("%s-%s", claim.Name, podName))

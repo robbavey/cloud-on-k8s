@@ -16,7 +16,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/reconcile"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/expectations"
-	sset "github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/sset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 )
 
