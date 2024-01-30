@@ -22,7 +22,7 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/set"
 )
 
-type StatefulSetList []appsv1.StatefulSet
+type StatefulSetList []appsv1.StatefulSet //nolint:revive
 
 // RetrieveActualStatefulSets returns the list of existing StatefulSets labeled for the given es cluster.
 // It is sorted using a natural order sort so that algorithms which are using the resulting list are more predictable and stable.

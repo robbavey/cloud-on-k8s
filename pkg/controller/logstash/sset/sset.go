@@ -23,9 +23,9 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/labels"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
+	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
-	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 )
 
 type Params struct {

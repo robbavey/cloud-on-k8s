@@ -18,8 +18,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
@@ -679,7 +679,6 @@ func TestReconcileLogstash_Resize(t *testing.T) {
 			desiredCapacity: "3Gi",
 			storageClass:    resizableStorageClass,
 			extraVerify: func(r ReconcileLogstash, desiredCapacity string) (reconcile.Result, error) {
-
 				// When performing an actual volume resize, the first pass of the reconciler adds annotations to
 				// Logstash with details of the StatefulSet to be replaced.
 				updatedls := logstashv1alpha1.Logstash{}

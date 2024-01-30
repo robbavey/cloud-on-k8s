@@ -390,7 +390,6 @@ func deleteAnnotation(obj client.Object, annotation string) error {
 	return nil
 }
 
-
 // ssetsToRecreate returns the list of StatefulSet that should be recreated, based on annotations
 // in the parent component resource.
 func ssetsToRecreate(obj client.Object, annotationPrefix string) (map[string]appsv1.StatefulSet, error) {

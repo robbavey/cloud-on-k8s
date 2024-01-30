@@ -82,14 +82,14 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		// Otherwise, some operation could be performed with wrong assumptions:
 		// the sset doesn't exist (was just deleted), but the Pods do actually exist.
 		ulog.FromContext(params.Context).V(1).Info("StatefulSets recreation in progress, re-queueing after 30 seconds.", "namespace", params.Logstash.Namespace, "ls_name", params.Logstash.Name,
-			 "status", params.Status)
+			"status", params.Status)
 		return results.WithResult(reconcile.Result{RequeueAfter: 30 * time.Second}), params.Status
 	}
 
 	actualStatefulSet, err := retrieveActualStatefulSet(params.Client, params.Logstash)
 	notFound := apierrors.IsNotFound(err)
 
-	if err != nil && !notFound{
+	if err != nil && !notFound {
 		return results.WithError(err), params.Status
 	}
 
@@ -167,4 +167,3 @@ func retrieveActualStatefulSet(c k8s.Client, ls logstashv1alpha1.Logstash) (apps
 
 	return sset, nil
 }
-
