@@ -4,36 +4,54 @@
 
 package statefulset
 
-//import (
-//	"testing"
-//
-//	//"github.com/stretchr/testify/assert"
-//	//"github.com/stretchr/testify/require"
-//	//appsv1 "k8s.io/api/apps/v1"
-//	//corev1 "k8s.io/api/core/v1"
-//	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-//	//"k8s.io/utils/ptr"
-//	//"sigs.k8s.io/controller-runtime/pkg/client"
-//
-//	//esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
-//	//"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
-//)
+import (
+	"testing"
 
-//func TestPodName(t *testing.T) {
-//	require.Equal(t, "sset-2", PodName("sset", 2))
-//}
-//
-//func TestPodNames(t *testing.T) {
-//	require.Equal(t,
-//		[]string{"sset-0", "sset-1", "sset-2"},
-//		PodNames(appsv1.StatefulSet{
-//			ObjectMeta: metav1.ObjectMeta{
-//				Namespace: "ns",
-//				Name:      "sset",
-//			},
-//			Spec: appsv1.StatefulSetSpec{
-//				Replicas: ptr.To[int32](3),
-//			},
-//		}),
-//	)
-//}
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
+)
+
+// Test that we actually filter on the sset name and the namespace
+func TestGetActualPodsForStatefulSet(t *testing.T) {
+	objs := []client.Object{
+		getPodSample("pod0", "ns0", "sset0", "clus0", "0"),
+		getPodSample("pod1", "ns1", "sset0", "clus0", "0"),
+		getPodSample("pod2", "ns0", "sset1", "clus1", "0"),
+		getPodSample("pod3", "ns0", "sset1", "clus0", "0"),
+	}
+	c := k8s.NewFakeClient(objs...)
+	sset0 := getSsetSample("sset0", "ns0", "clus0")
+	pods, err := GetActualPodsForStatefulSet(c, k8s.ExtractNamespacedName(&sset0), label.StatefulSetNameLabelName)
+	require.NoError(t, err)
+	// only one pod is in the same stateful set and namespace
+	assert.Equal(t, 1, len(pods))
+}
+
+func getPodSample(name, namespace, ssetName, clusterName, revision string) *corev1.Pod {
+	return TestPod{
+		Namespace:       namespace,
+		Name:            name,
+		ClusterName:     clusterName,
+		StatefulSetName: ssetName,
+		Revision:        revision,
+	}.BuildPtr()
+}
+
+func getSsetSample(name, namespace, clusterName string) appsv1.StatefulSet {
+	return TestSset{
+		Name:        name,
+		Namespace:   namespace,
+		ClusterName: clusterName,
+		Replicas:    3,
+		Status: appsv1.StatefulSetStatus{
+			CurrentRevision: "1",
+			UpdateRevision:  "1",
+		},
+	}.Build()
+}

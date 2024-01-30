@@ -10,6 +10,7 @@ import (
 	"hash/fnv"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
@@ -21,11 +22,11 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/keystore"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/operator"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/watches"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/configs"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/labels"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/sset"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/stackmon"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/volume"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
@@ -170,11 +171,19 @@ func (p *Params) expectationsSatisfied(ctx context.Context) (bool, string, error
 
 	if !notFound {
 		// make sure StatefulSet statuses have been reconciled by the StatefulSet controller
-		pendingStatefulSetReconciliation := sset.IsPendingReconciliation(actualStatefulSet)
+		pendingStatefulSetReconciliation := isPendingReconciliation(actualStatefulSet)
 		if pendingStatefulSetReconciliation {
 			log.V(1).Info("StatefulSets observedGeneration is not reconciled yet, re-queueing", "namespace", p.Logstash.Namespace, "ls_name", p.Logstash.Name)
 			return false, fmt.Sprintf("observedGeneration is not reconciled yet for StatefulSet %s", actualStatefulSet.Name), nil
 		}
 	}
-	return sset.PodReconciliationDone(ctx, p.Client, actualStatefulSet)
+	return podReconciliationDone(ctx, p.Client, actualStatefulSet)
+}
+
+func podReconciliationDone(ctx context.Context, c k8s.Client, sset appsv1.StatefulSet) (bool, string, error) {
+	return statefulset.PodReconciliationDone(ctx, c, sset, labels.StatefulSetNameLabelName)
+}
+
+func isPendingReconciliation(sset appsv1.StatefulSet) bool {
+	return sset.Generation != sset.Status.ObservedGeneration
 }

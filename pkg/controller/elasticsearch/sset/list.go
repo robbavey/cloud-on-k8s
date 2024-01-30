@@ -8,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -157,28 +156,10 @@ func (l StatefulSetList) GetActualPods(c k8s.Client) ([]corev1.Pod, error) {
 // - removed (but still there in our resources cache)
 // Status of the pods (running, error, etc.) is ignored.
 func (l StatefulSetList) PodReconciliationDone(ctx context.Context, c k8s.Client) (bool, string, error) {
-	for _, statefulSet := range l {
-		pendingCreations, pendingDeletions, err := pendingPodsForStatefulSet(c, statefulSet)
-		if err != nil {
-			return false, "", err
-		}
-		if len(pendingCreations) > 0 || len(pendingDeletions) > 0 {
-			ulog.FromContext(ctx).V(1).Info(
-				"Some pods still need to be created/deleted",
-				"namespace", statefulSet.Namespace, "statefulset_name", statefulSet.Name,
-				"pending_creations", pendingCreations, "pending_deletions", pendingDeletions,
-			)
-
-			var reason strings.Builder
-			reason.WriteString(fmt.Sprintf("StatefulSet %s has pending Pod operations", statefulSet.Name))
-			if len(pendingCreations) > 0 {
-				reason.WriteString(fmt.Sprintf(", creations: %s", pendingCreations))
-			}
-			if len(pendingDeletions) > 0 {
-				reason.WriteString(fmt.Sprintf(", deletions: %s", pendingDeletions))
-			}
-
-			return false, reason.String(), nil
+	for _, statefulset := range l {
+		ok, reason, err := sset.PodReconciliationDone(ctx, c, statefulset, label.StatefulSetNameLabelName)
+		if !ok{
+			return false, reason, err
 		}
 	}
 	return true, "", nil
@@ -222,6 +203,16 @@ func (l StatefulSetList) WithStatefulSet(statefulSet appsv1.StatefulSet) Statefu
 	return append(l, statefulSet)
 }
 
+// AtLeastOneESVersionMatch returns true if at least one StatefulSet's ES version matches the given condition.
+func (l StatefulSetList) AtLeastOneESVersionMatch(ctx context.Context, condition func(v version.Version) bool) bool {
+	for _, s := range l {
+		if ESVersionMatch(ctx, s, condition) {
+			return true
+		}
+	}
+	return false
+}
+
 // ESVersionMatch returns true if the ES version for this StatefulSet matches the given condition.
 func ESVersionMatch(ctx context.Context, statefulSet appsv1.StatefulSet, condition func(v version.Version) bool) bool {
 	v, err := GetESVersion(statefulSet)
@@ -230,14 +221,4 @@ func ESVersionMatch(ctx context.Context, statefulSet appsv1.StatefulSet, conditi
 		return false
 	}
 	return condition(v)
-}
-
-// AtLeastOneESVersionMatch returns true if at least one StatefulSet's ES version matches the given condition.
-func AtLeastOneESVersionMatch(ctx context.Context, statefulSets StatefulSetList, condition func(v version.Version) bool) bool {
-	for _, s := range statefulSets {
-		if ESVersionMatch(ctx, s, condition) {
-			return true
-		}
-	}
-	return false
 }

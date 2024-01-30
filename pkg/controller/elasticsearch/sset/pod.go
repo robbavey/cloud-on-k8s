@@ -19,21 +19,12 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/version"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/elasticsearch/label"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 )
 
 // GetActualPodsForStatefulSet returns the existing pods associated to this StatefulSet.
 // The returned pods may not match the expected StatefulSet replicas in a transient situation.
 func GetActualPodsForStatefulSet(c k8s.Client, sset types.NamespacedName) ([]corev1.Pod, error) {
-	var pods corev1.PodList
-	ns := client.InNamespace(sset.Namespace)
-	matchLabels := client.MatchingLabels(map[string]string{
-		label.StatefulSetNameLabelName: sset.Name,
-	})
-	if err := c.List(context.Background(), &pods, matchLabels, ns); err != nil {
-		return nil, err
-	}
-	return pods.Items, nil
+	return statefulset.GetActualPodsForStatefulSet(c, sset, label.StatefulSetNameLabelName)
 }
 
 // GetActualPodsForCluster return the existing pods associated to this cluster.
@@ -65,16 +56,8 @@ func GetActualMastersForCluster(c k8s.Client, es esv1.Elasticsearch) ([]corev1.P
 	return pods.Items, nil
 }
 
-func pendingPodsForStatefulSet(c k8s.Client, statefulSet appsv1.StatefulSet) ([]string, []string, error) {
-	// check all expected pods are there: no more, no less
-	actualPods, err := GetActualPodsForStatefulSet(c, k8s.ExtractNamespacedName(&statefulSet))
-	if err != nil {
-		return nil, nil, err
-	}
-	actualPodNames := k8s.PodNames(actualPods)
-	expectedPodNames := statefulset.PodNames(statefulSet)
-	pendingCreations, pendingDeletions := stringsutil.Difference(expectedPodNames, actualPodNames)
-	return pendingCreations, pendingDeletions, nil
+func pendingPodsForStatefulSet(c k8s.Client, sset appsv1.StatefulSet) ([]string, []string, error) {
+	return statefulset.PendingPodsForStatefulSet(c, sset, label.StatefulSetNameLabelName)
 }
 
 // StatefulSetName returns the name of the statefulset a Pod belongs to.
