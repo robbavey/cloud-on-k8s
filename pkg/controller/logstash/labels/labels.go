@@ -33,7 +33,7 @@ func NewLabels(logstash logstashv1alpha1.Logstash) map[string]string {
 	}
 }
 
-// NewLabelSelectorForElasticsearch returns a labels.Selector that matches the labels as constructed by NewLabels
+// NewLabelSelectorForLogstash returns a labels.Selector that matches the labels as constructed by NewLabels
 func NewLabelSelectorForLogstash(ls logstashv1alpha1.Logstash) client.MatchingLabels {
 	return NewLabelSelectorForLogstashName(ls.Name)
 }

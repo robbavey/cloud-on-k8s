@@ -6,26 +6,17 @@ package sset
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	lsv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/expectations"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/hash"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/statefulset"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/labels"
-
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
-	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/maps"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
 )
 
 type Params struct {
@@ -111,75 +102,4 @@ func Reconcile(ctx context.Context, c k8s.Client, expected appsv1.StatefulSet, o
 // EqualTemplateHashLabels reports whether actual and expected StatefulSets have the same template hash label value.
 func EqualTemplateHashLabels(expected, actual appsv1.StatefulSet) bool {
 	return expected.Labels[hash.TemplateHashLabelName] == actual.Labels[hash.TemplateHashLabelName]
-}
-
-// GetActualPodsForStatefulSet returns the existing pods associated to this StatefulSet.
-// The returned pods may not match the expected StatefulSet replicas in a transient situation.
-func GetActualPodsForStatefulSet(c k8s.Client, sset types.NamespacedName) ([]corev1.Pod, error) {
-	var pods corev1.PodList
-	ns := client.InNamespace(sset.Namespace)
-	matchLabels := client.MatchingLabels(map[string]string{
-		labels.StatefulSetNameLabelName: sset.Name,
-	})
-	if err := c.List(context.Background(), &pods, matchLabels, ns); err != nil {
-		return nil, err
-	}
-	return pods.Items, nil
-}
-
-// RetrieveActualStatefulSet returns the StatefulSet for the given ls cluster.
-func RetrieveActualStatefulSet(c k8s.Client, ls lsv1alpha1.Logstash) (appsv1.StatefulSet, error) {
-	var sset appsv1.StatefulSet
-	err := c.Get(context.Background(), types.NamespacedName{Name: lsv1alpha1.Name(ls.Name), Namespace: ls.Namespace}, &sset)
-	if err != nil {
-		return appsv1.StatefulSet{}, err
-	}
-
-	return sset, nil
-}
-
-// PodReconciliationDone returns true if actual existing pods match what is specified in the StatefulSetList.
-// It may return false if there are pods in the process of being:
-// - created (but not there in our resources cache)
-// - removed (but still there in our resources cache)
-// Status of the pods (running, error, etc.) is ignored.
-func PodReconciliationDone(ctx context.Context, c k8s.Client, statefulSet appsv1.StatefulSet) (bool, string, error) {
-	pendingCreations, pendingDeletions, err := pendingPodsForStatefulSet(c, statefulSet)
-	if err != nil {
-		return false, "", err
-	}
-	if len(pendingCreations) > 0 || len(pendingDeletions) > 0 {
-		ulog.FromContext(ctx).V(1).Info(
-			"Some pods still need to be created/deleted",
-			"namespace", statefulSet.Namespace, "statefulset_name", statefulSet.Name,
-			"pending_creations", pendingCreations, "pending_deletions", pendingDeletions,
-		)
-
-		var reason strings.Builder
-		if len(pendingCreations) > 0 {
-			reason.WriteString(fmt.Sprintf(", creations: %s", pendingCreations))
-		}
-		if len(pendingDeletions) > 0 {
-			reason.WriteString(fmt.Sprintf(", deletions: %s", pendingDeletions))
-		}
-
-		return false, reason.String(), nil
-	}
-	return true, "", nil
-}
-
-func pendingPodsForStatefulSet(c k8s.Client, statefulSet appsv1.StatefulSet) ([]string, []string, error) {
-	// check all expected pods are there: no more, no less
-	actualPods, err := GetActualPodsForStatefulSet(c, k8s.ExtractNamespacedName(&statefulSet))
-	if err != nil {
-		return nil, nil, err
-	}
-	actualPodNames := k8s.PodNames(actualPods)
-	expectedPodNames := statefulset.PodNames(statefulSet)
-	pendingCreations, pendingDeletions := stringsutil.Difference(expectedPodNames, actualPodNames)
-	return pendingCreations, pendingDeletions, nil
-}
-
-func IsPendingReconciliation(sset appsv1.StatefulSet) bool {
-	return sset.Generation != sset.Status.ObservedGeneration
 }
