@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/tools/record"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/record"
 
 	logstashv1alpha1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/logstash/v1alpha1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/certificates"
@@ -164,7 +164,7 @@ func (p *Params) expectationsSatisfied(ctx context.Context) (bool, string, error
 	actualStatefulSet, err := retrieveActualStatefulSet(p.Client, p.Logstash)
 	notFound := apierrors.IsNotFound(err)
 
-	if err != nil && !notFound{
+	if err != nil && !notFound {
 		return false, "Cannot retrieve actual stateful sets", err
 	}
 

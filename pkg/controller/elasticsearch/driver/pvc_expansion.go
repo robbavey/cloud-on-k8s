@@ -21,4 +21,3 @@ const (
 func recreateStatefulSets(ctx context.Context, k8sclient k8s.Client, es esv1.Elasticsearch) (int, error) {
 	return volume.RecreateStatefulSets(ctx, k8sclient, &es, RecreateStatefulSetAnnotationPrefix)
 }
-

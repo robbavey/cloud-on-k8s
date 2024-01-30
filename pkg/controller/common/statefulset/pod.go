@@ -6,6 +6,7 @@ package statefulset
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -95,7 +96,7 @@ func pendingPodsForStatefulSet(c k8s.Client, statefulSet appsv1.StatefulSet) ([]
 }
 
 // StatefulSetName returns the name of the statefulset a Pod belongs to.
-func StatefulSetName(podName string) (ssetName string, ordinal int32, err error) {
+func StatefulSetName(podName string) (ssetName string, ordinal int32, err error) { //nolint:revive
 	ordinalPos := strings.LastIndex(podName, "-")
 	ordinalAsString := podName[ordinalPos+1:]
 	ordinalAsInt, err := strconv.ParseInt(ordinalAsString, 10, 32)
