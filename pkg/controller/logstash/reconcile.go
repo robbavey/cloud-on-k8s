@@ -26,18 +26,12 @@ import (
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/reconciler"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/tracing"
-	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/volume"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/labels"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/sset"
+	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/logstash/volume"
 
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
-)
-
-const (
-	// RecreateStatefulSetAnnotationPrefix is used to annotate the Logstash resource
-	// with StatefulSet to recreate. The StatefulSet name is appended to this name.
-	RecreateStatefulSetAnnotationPrefix = "logstash.k8s.elastic.co/recreate-"
 )
 
 func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*reconciler.Results, logstashv1alpha1.LogstashStatus) {
@@ -66,7 +60,7 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 		VolumeClaimTemplates: params.Logstash.Spec.VolumeClaimTemplates,
 	})
 
-	recreations, err := recreateStatefulSets(params.Context, params.Client, params.Logstash)
+	recreations, err := volume.RecreateStatefulSets(params.Context, params.Client, params.Logstash)
 
 	if err != nil {
 		if apierrors.IsConflict(err) {
@@ -87,14 +81,14 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 	}
 
 	actualStatefulSet, err := retrieveActualStatefulSet(params.Client, params.Logstash)
-	notFound := apierrors.IsNotFound(err)
 
+	notFound := apierrors.IsNotFound(err)
 	if err != nil && !notFound {
 		return results.WithError(err), params.Status
 	}
 
 	if !notFound {
-		recreateSset, err := volume.HandleVolumeExpansion(params.Context, params.Client, &params.Logstash, expected, actualStatefulSet, true)
+		recreateSset, err := volume.HandleVolumeExpansion(params.Context, params.Client, params.Logstash, expected, actualStatefulSet, true)
 		if err != nil {
 			return results.WithError(err), params.Status
 		}
@@ -106,7 +100,6 @@ func reconcileStatefulSet(params Params, podTemplate corev1.PodTemplateSpec) (*r
 	if err := controllerutil.SetControllerReference(&params.Logstash, &expected, scheme.Scheme); err != nil {
 		return results.WithError(err), params.Status
 	}
-
 	reconciled, err := sset.Reconcile(params.Context, params.Client, expected, &params.Logstash, params.Expectations)
 
 	if err != nil {
@@ -151,10 +144,6 @@ func updateStatus(ctx context.Context, logstash logstashv1alpha1.Logstash, clien
 	}
 	logstash.Status = status
 	return common.UpdateStatus(ctx, client, &logstash)
-}
-
-func recreateStatefulSets(ctx context.Context, k8sclient k8s.Client, ls logstashv1alpha1.Logstash) (int, error) {
-	return volume.RecreateStatefulSets(ctx, k8sclient, &ls, RecreateStatefulSetAnnotationPrefix)
 }
 
 // retrieveActualStatefulSet returns the StatefulSet for the given ls cluster.

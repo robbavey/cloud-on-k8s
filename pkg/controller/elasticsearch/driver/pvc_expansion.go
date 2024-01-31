@@ -7,17 +7,19 @@ package driver
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
+
 	esv1 "github.com/elastic/cloud-on-k8s/v2/pkg/apis/elasticsearch/v1"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/controller/common/volume"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 )
 
-const (
-	// RecreateStatefulSetAnnotationPrefix is used to annotate the Elasticsearch resource
-	// with StatefulSets to recreate. The StatefulSet name is appended to this name.
-	RecreateStatefulSetAnnotationPrefix = "elasticsearch.k8s.elastic.co/recreate-"
-)
-
 func recreateStatefulSets(ctx context.Context, k8sclient k8s.Client, es esv1.Elasticsearch) (int, error) {
-	return volume.RecreateStatefulSets(ctx, k8sclient, &es, RecreateStatefulSetAnnotationPrefix)
+	return volume.RecreateStatefulSets(ctx, k8sclient, &es, es.Kind)
+}
+
+func handleVolumeExpansion(ctx context.Context, k8sClient k8s.Client, es esv1.Elasticsearch, expectedSset appsv1.StatefulSet,
+	actualSset appsv1.StatefulSet, validateStorageClass bool) (bool, error) {
+	return volume.HandleVolumeExpansion(ctx, k8sClient, &es, es.Kind, expectedSset, actualSset,
+		validateStorageClass)
 }

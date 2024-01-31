@@ -198,7 +198,8 @@ func Test_handleVolumeExpansionElasticsearch(t *testing.T) {
 			}
 
 			k8sClient := k8s.NewFakeClient(append(tt.runtimeObjs, &es)...)
-			recreate, err := HandleVolumeExpansion(context.Background(), k8sClient, &es, tt.args.expectedSset, tt.args.actualSset, tt.args.validateStorageClass)
+			recreate, err := HandleVolumeExpansion(context.Background(), k8sClient, &es, es.Kind,
+				tt.args.expectedSset, tt.args.actualSset, tt.args.validateStorageClass)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("handleVolumeExpansion() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -224,7 +225,7 @@ func Test_handleVolumeExpansionElasticsearch(t *testing.T) {
 				wantUpdatedSset.Spec.VolumeClaimTemplates = tt.args.expectedSset.Spec.VolumeClaimTemplates
 
 				// test ssetsToRecreate along the way
-				toRecreate, err := ssetsToRecreate(&retrievedES, "elasticsearch.k8s.elastic.co/recreate-")
+				toRecreate, err := ssetsToRecreate(&retrievedES, retrievedES.Kind)
 				require.NoError(t, err)
 				require.Equal(t,
 					map[string]appsv1.StatefulSet{
@@ -364,7 +365,8 @@ func Test_handleVolumeExpansionLogstash(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "ls"},
 				TypeMeta:   metav1.TypeMeta{Kind: logstashv1alpha1.Kind}}
 			k8sClient := k8s.NewFakeClient(append(tt.runtimeObjs, &ls)...)
-			recreate, err := HandleVolumeExpansion(context.Background(), k8sClient, &ls, tt.args.expectedSset, tt.args.actualSset, tt.args.validateStorageClass)
+			recreate, err := HandleVolumeExpansion(context.Background(), k8sClient, &ls, ls.Kind,
+				tt.args.expectedSset, tt.args.actualSset, tt.args.validateStorageClass)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("handleVolumeExpansion() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -390,7 +392,7 @@ func Test_handleVolumeExpansionLogstash(t *testing.T) {
 				wantUpdatedSset.Spec.VolumeClaimTemplates = tt.args.expectedSset.Spec.VolumeClaimTemplates
 
 				// test ssetsToRecreate along the way
-				toRecreate, err := ssetsToRecreate(&retrievedLS, "logstash.k8s.elastic.co/recreate-")
+				toRecreate, err := ssetsToRecreate(&retrievedLS, retrievedLS.Kind)
 				require.NoError(t, err)
 				require.Equal(t,
 					map[string]appsv1.StatefulSet{
@@ -566,7 +568,7 @@ func Test_recreateStatefulSets(t *testing.T) {
 			es := tt.args.es
 			k8sClient := k8s.NewFakeClient(append(tt.args.runtimeObjs, &es)...)
 
-			got, err := RecreateStatefulSets(context.Background(), k8sClient, &es, "elasticsearch.k8s.elastic.co/recreate-")
+			got, err := RecreateStatefulSets(context.Background(), k8sClient, &es, es.Kind)
 			require.NoError(t, err)
 			require.Equal(t, tt.wantRecreations, got)
 
@@ -666,7 +668,7 @@ func Test_updatePodOwners(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			es := tt.args.es
-			err := updatePodOwners(context.Background(), tt.args.k8sClient, &es, tt.args.statefulSet)
+			err := updatePodOwners(context.Background(), tt.args.k8sClient, &es, es.Kind, tt.args.statefulSet)
 			require.NoError(t, err)
 
 			var retrievedPods corev1.PodList
@@ -753,7 +755,7 @@ func Test_removePodOwner(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			es := tt.args.es
-			err := removePodOwner(context.Background(), tt.args.k8sClient, &es, tt.args.statefulSet)
+			err := removePodOwner(context.Background(), tt.args.k8sClient, &es, es.Kind, tt.args.statefulSet)
 			require.NoError(t, err)
 
 			var retrievedPods corev1.PodList

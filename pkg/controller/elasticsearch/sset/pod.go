@@ -56,12 +56,8 @@ func GetActualMastersForCluster(c k8s.Client, es esv1.Elasticsearch) ([]corev1.P
 	return pods.Items, nil
 }
 
-func pendingPodsForStatefulSet(c k8s.Client, sset appsv1.StatefulSet) ([]string, []string, error) {
-	return statefulset.PendingPodsForStatefulSet(c, sset, label.StatefulSetNameLabelName)
-}
-
 // StatefulSetName returns the name of the statefulset a Pod belongs to.
-func StatefulSetName(podName string) (ssetName string, ordinal int32, err error) { //nolint:revive
+func StatefulSetName(podName string) (ssetName string, ordinal int32, err error) {
 	ordinalPos := strings.LastIndex(podName, "-")
 	ordinalAsString := podName[ordinalPos+1:]
 	ordinalAsInt, err := strconv.ParseInt(ordinalAsString, 10, 32)

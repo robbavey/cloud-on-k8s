@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/k8s"
 	ulog "github.com/elastic/cloud-on-k8s/v2/pkg/utils/log"
 	"github.com/elastic/cloud-on-k8s/v2/pkg/utils/stringsutil"
@@ -78,7 +79,6 @@ func PodReconciliationDone(ctx context.Context, c k8s.Client, statefulSet appsv1
 	}
 	return true, "", nil
 }
-
 
 func PendingPodsForStatefulSet(c k8s.Client, statefulSet appsv1.StatefulSet, labelName string) ([]string, []string, error) {
 	// check all expected pods are there: no more, no less

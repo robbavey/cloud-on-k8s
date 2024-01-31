@@ -36,7 +36,8 @@ import (
 func HandleVolumeExpansion(
 	ctx context.Context,
 	k8sClient k8s.Client,
-	obj client.Object,
+	owner client.Object,
+	ownerKind string,
 	expectedSset appsv1.StatefulSet,
 	actualSset appsv1.StatefulSet,
 	validateStorageClass bool,
@@ -52,14 +53,14 @@ func HandleVolumeExpansion(
 	}
 
 	// resize all PVCs that can be resized
-	err := ResizePVCs(ctx, k8sClient, obj, expectedSset, actualSset)
+	err := ResizePVCs(ctx, k8sClient, owner, expectedSset, actualSset)
 	if err != nil {
 		return false, err
 	}
 
 	// schedule the StatefulSet for recreation if needed
 	if needsRecreate(expectedSset, actualSset) {
-		return true, annotateForRecreation(ctx, k8sClient, obj, actualSset, expectedSset.Spec.VolumeClaimTemplates)
+		return true, annotateForRecreation(ctx, k8sClient, owner, ownerKind, actualSset, expectedSset.Spec.VolumeClaimTemplates)
 	}
 
 	return false, nil
@@ -71,7 +72,7 @@ func HandleVolumeExpansion(
 func ResizePVCs(
 	ctx context.Context,
 	k8sClient k8s.Client,
-	obj client.Object,
+	owner client.Object,
 	expectedSset appsv1.StatefulSet,
 	actualSset appsv1.StatefulSet,
 ) error {
@@ -93,7 +94,7 @@ func ResizePVCs(
 				continue
 			}
 			accessor := meta.NewAccessor()
-			name, _ := accessor.Name(obj)
+			name, _ := accessor.Name(owner)
 
 			newSize := expectedClaim.Spec.Resources.Requests.Storage()
 			ulog.FromContext(ctx).Info("Resizing PVC storage requests. Depending on the volume provisioner, "+
@@ -115,11 +116,12 @@ func ResizePVCs(
 func annotateForRecreation(
 	ctx context.Context,
 	k8sClient k8s.Client,
-	obj client.Object,
+	owner client.Object,
+	ownerKind string,
 	actualSset appsv1.StatefulSet,
 	expectedClaims []corev1.PersistentVolumeClaim,
 ) error {
-	namespacedName := namespacedNameFromObject(obj)
+	namespacedName := namespacedNameFromObject(owner)
 
 	ulog.FromContext(ctx).Info("Preparing StatefulSet re-creation to account for PVC resize",
 		"namespace", namespacedName.Namespace, "name", namespacedName.Name, "statefulset_name", actualSset.Name)
@@ -131,12 +133,12 @@ func annotateForRecreation(
 		return err
 	}
 
-	err = setAnnotation(obj, fmt.Sprintf("%s%s", getRecreateStatefulSetAnnotationPrefix(obj), actualSset.Name), string(asJSON))
+	err = setAnnotation(owner, getRecreateStatefulSetAnnotationKey(ownerKind, actualSset.Name), string(asJSON))
 	if err != nil {
 		return err
 	}
 
-	return k8sClient.Update(ctx, obj)
+	return k8sClient.Update(ctx, owner)
 }
 
 // needsRecreate returns true if the StatefulSet needs to be re-created to account for volume expansion.
@@ -163,9 +165,9 @@ func needsRecreate(expectedSset appsv1.StatefulSet, actualSset appsv1.StatefulSe
 //  3. An annotation specifies StatefulSet Foo needs to be recreated. That StatefulSet does not exist: create it.
 //  4. An annotation specifies StatefulSet Foo needs to be recreated. That StatefulSet actually exists, but with
 //     a different UID: the re-creation is over, remove the annotation.
-func RecreateStatefulSets(ctx context.Context, k8sClient k8s.Client, obj client.Object, annotationPrefix string) (int, error) {
+func RecreateStatefulSets(ctx context.Context, k8sClient k8s.Client, owner client.Object, ownerKind string) (int, error) {
 	log := ulog.FromContext(ctx)
-	recreateList, err := ssetsToRecreate(obj, annotationPrefix)
+	recreateList, err := ssetsToRecreate(owner, ownerKind)
 	if err != nil {
 		return 0, err
 	}
@@ -174,7 +176,7 @@ func RecreateStatefulSets(ctx context.Context, k8sClient k8s.Client, obj client.
 	for annotation, toRecreate := range recreateList {
 		toRecreate := toRecreate
 
-		namespacedName := namespacedNameFromObject(obj)
+		namespacedName := namespacedNameFromObject(owner)
 
 		var existing appsv1.StatefulSet
 		err = k8sClient.Get(ctx, k8s.ExtractNamespacedName(&toRecreate), &existing)
@@ -185,10 +187,11 @@ func RecreateStatefulSets(ctx context.Context, k8sClient k8s.Client, obj client.
 
 		// already exists with the same UID: deletion case
 		case existing.UID == toRecreate.UID && !apierrors.IsNotFound(err):
+
 			log.Info("Deleting StatefulSet to account for resized PVCs, it will be recreated automatically",
 				"namespace", namespacedName.Namespace, "name", namespacedName.Name, "statefulset_name", existing.Name)
 			// mark the Pod as owned by the component resource while the StatefulSet is removed
-			if err := updatePodOwners(ctx, k8sClient, obj, existing); err != nil {
+			if err := updatePodOwners(ctx, k8sClient, owner, ownerKind, existing); err != nil {
 				return recreations, err
 			}
 			if err := deleteStatefulSet(ctx, k8sClient, existing); err != nil {
@@ -209,16 +212,16 @@ func RecreateStatefulSets(ctx context.Context, k8sClient k8s.Client, obj client.
 		// already recreated (existing.UID != toRecreate.UID): we're done
 		default:
 			// remove the temporary pod owner set before the StatefulSet was deleted
-			if err := removePodOwner(ctx, k8sClient, obj, existing); err != nil {
+			if err := removePodOwner(ctx, k8sClient, owner, ownerKind, existing); err != nil {
 				return recreations, err
 			}
 			// remove the annotation
-			err := deleteAnnotation(obj, annotation)
+			err := deleteAnnotation(owner, annotation)
 			if err != nil {
 				return recreations, err
 			}
 
-			if err := k8sClient.Update(ctx, obj); err != nil {
+			if err := k8sClient.Update(ctx, owner); err != nil {
 				return recreations, err
 			}
 			// one less recreation
@@ -259,22 +262,22 @@ func createStatefulSet(ctx context.Context, k8sClient k8s.Client, sset appsv1.St
 // Pods are already owned by the StatefulSet resource, but when we'll (temporarily) delete that StatefulSet
 // they won't be owned anymore. At this point if the resource is deleted (before the StatefulSet
 // is re-created), we also want the Pods to be deleted automatically.
-func updatePodOwners(ctx context.Context, k8sClient k8s.Client, obj client.Object, statefulSet appsv1.StatefulSet) error {
-	namespacedName := namespacedNameFromObject(obj)
+func updatePodOwners(ctx context.Context, k8sClient k8s.Client, owner client.Object, ownerKind string, statefulSet appsv1.StatefulSet) error {
+	namespacedName := namespacedNameFromObject(owner)
 
 	ulog.FromContext(ctx).V(1).Info("Setting an owner ref to the component resource on the future orphan Pods",
 		"namespace", namespacedName.Namespace, "name", namespacedName.Name, "statefulset_name", statefulSet.Name)
-	return updatePods(ctx, k8sClient, obj, statefulSet, func(p *corev1.Pod) error {
-		return controllerutil.SetOwnerReference(obj, p, scheme.Scheme)
+	return updatePods(ctx, k8sClient, getStatefulSetLabelName(ownerKind), statefulSet, func(p *corev1.Pod) error {
+		return controllerutil.SetOwnerReference(owner, p, scheme.Scheme)
 	})
 }
 
 // removePodOwner removes any reference to the resource from the Pods, that was set in updatePodOwners.
-func removePodOwner(ctx context.Context, k8sClient k8s.Client, obj client.Object, statefulSet appsv1.StatefulSet) error {
+func removePodOwner(ctx context.Context, k8sClient k8s.Client, owner client.Object, ownerKind string, statefulSet appsv1.StatefulSet) error {
 	accessor := meta.NewAccessor()
-	name, _ := accessor.Name(obj)
-	namespace, _ := accessor.Namespace(obj)
-	UID, err := accessor.UID(obj)
+	name, _ := accessor.Name(owner)
+	namespace, _ := accessor.Namespace(owner)
+	UID, err := accessor.UID(owner)
 
 	if err != nil {
 		return err
@@ -284,7 +287,7 @@ func removePodOwner(ctx context.Context, k8sClient k8s.Client, obj client.Object
 		"namespace", namespace, "name", name, "statefulset_name", statefulSet.Name)
 	updateFunc := func(p *corev1.Pod) error {
 		for i, ownerRef := range p.OwnerReferences {
-			if ownerRef.UID == UID && ownerRef.Name == name && ownerRef.Kind == obj.GetObjectKind().GroupVersionKind().Kind {
+			if ownerRef.UID == UID && ownerRef.Name == name && ownerRef.Kind == ownerKind {
 				// remove from the owner ref slice
 				p.OwnerReferences = append(p.OwnerReferences[:i], p.OwnerReferences[i+1:]...)
 				return nil
@@ -292,12 +295,12 @@ func removePodOwner(ctx context.Context, k8sClient k8s.Client, obj client.Object
 		}
 		return nil
 	}
-	return updatePods(ctx, k8sClient, obj, statefulSet, updateFunc)
+	return updatePods(ctx, k8sClient, getStatefulSetLabelName(ownerKind), statefulSet, updateFunc)
 }
 
 // updatePods applies updateFunc on all existing Pods from the StatefulSet, then update those Pods.
-func updatePods(ctx context.Context, k8sClient k8s.Client, obj client.Object, statefulSet appsv1.StatefulSet, updateFunc func(p *corev1.Pod) error) error {
-	pods, err := GetActualPodsForStatefulSet(k8sClient, obj, k8s.ExtractNamespacedName(&statefulSet))
+func updatePods(ctx context.Context, k8sClient k8s.Client, label string, statefulSet appsv1.StatefulSet, updateFunc func(p *corev1.Pod) error) error {
+	pods, err := sset.GetActualPodsForStatefulSet(k8sClient, k8s.ExtractNamespacedName(&statefulSet), label)
 
 	if err != nil {
 		return err
@@ -313,37 +316,14 @@ func updatePods(ctx context.Context, k8sClient k8s.Client, obj client.Object, st
 	return nil
 }
 
-// GetActualPodsForStatefulSet returns the existing pods associated to this StatefulSet.
-// The returned pods may not match the expected StatefulSet replicas in a transient situation.
-func GetActualPodsForStatefulSet(c k8s.Client, obj client.Object, sset types.NamespacedName) ([]corev1.Pod, error) {
-	var pods corev1.PodList
-	ns := client.InNamespace(sset.Namespace)
-	matchLabels := client.MatchingLabels(map[string]string{
-		getStatefulSetLabelName(obj): sset.Name,
-	})
-
-	if err := c.List(context.Background(), &pods, matchLabels, ns); err != nil {
-		return nil, err
-	}
-	return pods.Items, nil
-}
-
-func getStatefulSetLabelName(obj client.Object) string {
-	return fmt.Sprintf("%s.k8s.elastic.co/statefulset-name", strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind))
-}
-
-func getRecreateStatefulSetAnnotationPrefix(obj client.Object) string {
-	return fmt.Sprintf("%s.k8s.elastic.co/recreate-", strings.ToLower(obj.GetObjectKind().GroupVersionKind().Kind))
-}
-
-func namespacedNameFromObject(obj client.Object) types.NamespacedName {
+func namespacedNameFromObject(owner client.Object) types.NamespacedName {
 	accessor := meta.NewAccessor()
-	name, err := accessor.Name(obj)
+	name, err := accessor.Name(owner)
 	if err != nil {
 		name = "-"
 	}
 
-	namespace, _ := accessor.Namespace(obj)
+	namespace, _ := accessor.Namespace(owner)
 
 	if err != nil {
 		namespace = "-"
@@ -351,9 +331,9 @@ func namespacedNameFromObject(obj client.Object) types.NamespacedName {
 	return types.NamespacedName{Name: name, Namespace: namespace}
 }
 
-func setAnnotation(obj client.Object, annotationKey string, annotationValue string) error {
+func setAnnotation(owner client.Object, annotationKey string, annotationValue string) error {
 	accessor := meta.NewAccessor()
-	annotations, err := accessor.Annotations(obj)
+	annotations, err := accessor.Annotations(owner)
 
 	if err != nil {
 		return err
@@ -362,17 +342,16 @@ func setAnnotation(obj client.Object, annotationKey string, annotationValue stri
 		annotations = make(map[string]string, 1)
 	}
 	annotations[annotationKey] = annotationValue
-
-	err = accessor.SetAnnotations(obj, annotations)
+	err = accessor.SetAnnotations(owner, annotations)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func deleteAnnotation(obj client.Object, annotation string) error {
+func deleteAnnotation(owner client.Object, annotation string) error {
 	accessor := meta.NewAccessor()
-	annotations, err := accessor.Annotations(obj)
+	annotations, err := accessor.Annotations(owner)
 
 	if err != nil {
 		return err
@@ -382,7 +361,7 @@ func deleteAnnotation(obj client.Object, annotation string) error {
 		annotations = make(map[string]string, 1)
 	}
 	delete(annotations, annotation)
-	err = accessor.SetAnnotations(obj, annotations)
+	err = accessor.SetAnnotations(owner, annotations)
 
 	if err != nil {
 		return err
@@ -392,17 +371,16 @@ func deleteAnnotation(obj client.Object, annotation string) error {
 
 // ssetsToRecreate returns the list of StatefulSet that should be recreated, based on annotations
 // in the parent component resource.
-func ssetsToRecreate(obj client.Object, annotationPrefix string) (map[string]appsv1.StatefulSet, error) {
+func ssetsToRecreate(owner client.Object, ownerKind string) (map[string]appsv1.StatefulSet, error) {
 	accessor := meta.NewAccessor()
-	annotations, err := accessor.Annotations(obj)
-
+	annotations, err := accessor.Annotations(owner)
 	if err != nil {
 		return nil, err
 	}
 
 	toRecreate := map[string]appsv1.StatefulSet{}
 	for key, value := range annotations {
-		if !strings.HasPrefix(key, annotationPrefix) {
+		if !strings.HasPrefix(key, getRecreateStatefulSetAnnotationPrefix(ownerKind)) {
 			continue
 		}
 		var sset appsv1.StatefulSet
@@ -412,4 +390,16 @@ func ssetsToRecreate(obj client.Object, annotationPrefix string) (map[string]app
 		toRecreate[key] = sset
 	}
 	return toRecreate, nil
+}
+
+func getStatefulSetLabelName(ownerKind string) string {
+	return fmt.Sprintf("%s.k8s.elastic.co/statefulset-name", strings.ToLower(ownerKind))
+}
+
+func getRecreateStatefulSetAnnotationPrefix(ownerKind string) string {
+	return fmt.Sprintf("%s.k8s.elastic.co/recreate-", strings.ToLower(ownerKind))
+}
+
+func getRecreateStatefulSetAnnotationKey(ownerKind string, ssetName string) string {
+	return fmt.Sprintf("%s%s", getRecreateStatefulSetAnnotationPrefix(ownerKind), ssetName)
 }

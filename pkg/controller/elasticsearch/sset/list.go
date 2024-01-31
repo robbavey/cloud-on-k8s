@@ -158,7 +158,7 @@ func (l StatefulSetList) GetActualPods(c k8s.Client) ([]corev1.Pod, error) {
 func (l StatefulSetList) PodReconciliationDone(ctx context.Context, c k8s.Client) (bool, string, error) {
 	for _, statefulset := range l {
 		ok, reason, err := sset.PodReconciliationDone(ctx, c, statefulset, label.StatefulSetNameLabelName)
-		if !ok{
+		if !ok {
 			return false, reason, err
 		}
 	}
